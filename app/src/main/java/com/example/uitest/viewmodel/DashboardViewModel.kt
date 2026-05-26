@@ -13,112 +13,42 @@ import android.app.Application
 import android.net.Uri
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
 import com.example.uitest.data.ModuleData
-import com.example.uitest.data.TermuxMessage
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
 
 
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
+    val uartManager = UartManager(application)
 
-    private val termuxClient = TermuxClient()
-
-    var latestLine: String? = null
-        private set
-
-    init {
-        // Connect and start listening
-        viewModelScope.launch {
-            termuxClient.connect()
-            sendlayout()
-            listenForUpdates()
-        }
-    }
-
-    private suspend fun sendlayout() {
-        try {
+    private val server = DashboardServer(
+        context = application,
+        port = 8080,
+        layoutProvider = {
             val currentLayout = LayoutConfig(
                 columns = columns,
                 presets = statePresets.toLayoutPresets()
             )
+            Json.encodeToString(currentLayout)
+        },
+        uartManager = uartManager
+    )
 
-            val jsonString = Json.encodeToString(currentLayout)
-            termuxClient.send(jsonString)
-
-            println("Handshake: Layout sent to Termux successfully.")
-        } catch (e: Exception) {
-            println("Handshake failed: ${e.message}")
-        }
+    init {
+        server.start()
+        // Automatically try to connect to UART on start
+        uartManager.connect()
     }
 
-    private suspend fun listenForUpdates() {
-        val networkJson = Json { ignoreUnknownKeys = true }
-
-        withContext(Dispatchers.IO) {
-            try {
-                while (true) {
-                    val line = termuxClient.receiveLine() ?: break
-
-                    withContext(Dispatchers.Main) {
-                        try {
-                            // 1. Always parse into the Envelope first
-                            val envelope = networkJson.decodeFromString<TermuxMessage>(line)
-
-                            // 2. Decide what to do based on the "type"
-                            when (envelope.type) {
-                                "LAYOUT" -> {
-                                    val newLayout = networkJson.decodeFromString<LayoutConfig>(envelope.content)
-                                    columns = newLayout.columns
-                                    statePresets = newLayout.toStatePresets()
-                                    latestLine = "Layout Refreshed"
-                                }
-                                "LOG" -> {
-                                    latestLine = envelope.content
-                                    updateLogModules(envelope.content)
-                                }
-                            }
-                        } catch (e: Exception) {
-                            // Fallback for raw strings if the envelope fails
-                            latestLine = "Error: Invalid Envelope"
-                        }
-                    }
-                }
-            } finally {
-                termuxClient.disconnect()
-            }
-        }
+    override fun onCleared() {
+        super.onCleared()
+        server.stop()
+        uartManager.disconnect()
+        uartManager.unregister()
     }
-    /*
-    private suspend fun listenForUpdates() {
+    var latestLine: String? = null
+        private set
 
-        val jsonParser = Json { ignoreUnknownKeys = true }
-
-        withContext(Dispatchers.IO) {
-            try {
-                while (true) {
-
-                    //this is just to test soon to be obselete
-                    val line = termuxClient.receiveLine() ?: break
-                    withContext(Dispatchers.Main) {
-                        latestLine = line
-                        updateLogModules(line)
-                    //
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                // 4. Cleanup so you don't leave "ghost" sockets open
-                termuxClient.disconnect()
-            }
-        }
-    }
-    */
-    // just to test the termux connection to change the text on the module,
-    // soon to be obselete
     fun updateLogModules(newText: String) {
         statePresets.forEach { preset ->
             for (i in preset.indices) {
