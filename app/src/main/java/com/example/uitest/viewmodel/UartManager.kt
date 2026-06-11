@@ -12,6 +12,8 @@ import androidx.core.content.ContextCompat
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import com.hoho.android.usbserial.util.SerialInputOutputManager
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 class UartManager(private val context: Context) : SerialInputOutputManager.Listener {
 
@@ -21,7 +23,11 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
 
     private val ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION"
 
-    // Buffer to store incoming data for the web server
+    // Flow for real-time WebSocket push
+    private val _dataFlow = MutableSharedFlow<String>(extraBufferCapacity = 100)
+    val dataFlow = _dataFlow.asSharedFlow()
+
+    // Buffer for legacy HTTP polling
     private val bufferLock = Any()
     private val incomingBuffer = StringBuilder()
 
@@ -118,6 +124,7 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
             synchronized(bufferLock) {
                 incomingBuffer.append(message)
             }
+            _dataFlow.tryEmit(message)
             onDataReceived?.invoke(message)
         }
     }

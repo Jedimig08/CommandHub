@@ -20,6 +20,7 @@ import kotlinx.serialization.encodeToString
 
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
     val uartManager = UartManager(application)
+    val bluetoothManager = BluetoothClassicManager(application)
 
     private val server = DashboardServer(
         context = application,
@@ -31,7 +32,8 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             )
             Json.encodeToString(currentLayout)
         },
-        uartManager = uartManager
+        uartManager = uartManager,
+        bluetoothManager = bluetoothManager
     )
 
     init {
@@ -45,6 +47,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         server.stop()
         uartManager.disconnect()
         uartManager.unregister()
+        bluetoothManager.disconnect()
     }
     var latestLine: String? = null
         private set
