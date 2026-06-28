@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.Color
 import kotlinx.serialization.Serializable
 
 data class ModuleConfig(
-    val id: String,
+    val id: Int,
     val type: String,
     val spanX: Int,
     val aspRatio: Float,

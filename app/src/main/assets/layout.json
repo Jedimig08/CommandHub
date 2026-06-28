@@ -2,15 +2,15 @@
   "columns": 4,
   "presets": {
     "preset1": [
-      { "id": "battery", "type": "sensor", "spanX": 1, "aspRatio": 2},
-      { "id": "cpu", "type": "sensor", "spanX": 1, "aspRatio": 2},
-      { "id": "gps", "type": "sensor", "spanX": 1, "aspRatio": 2},
-      { "id": "video", "type": "video", "spanX": 4, "aspRatio": 2}
+      { "id": 0, "type": "SENSOR:1", "spanX": 1, "aspRatio": 2.0},
+      { "id": 1, "type": "SENSOR:4", "spanX": 1, "aspRatio": 2.0},
+      { "id": 2, "type": "LOG", "spanX": 2, "aspRatio": 2.0},
+      { "id": 3, "type": "CAMERA:0", "spanX": 4, "aspRatio": 2.0}
     ],
     "preset2": [
-      { "id": "imu", "type": "sensor", "spanX": 1, "aspRatio": 2},
-      { "id": "altitude", "type": "sensor", "spanX": 2, "aspRatio": 2},
-      { "id": "logs", "type": "log", "spanX": 2, "aspRatio": 2}
+      { "id": 0, "type": "SENSOR:9", "spanX": 2, "aspRatio": 1.0},
+      { "id": 1, "type": "SENSOR:10", "spanX": 2, "aspRatio": 1.0},
+      { "id": 2, "type": "CAMERA:0:3", "spanX": 4, "aspRatio": 1.5}
     ]
   }
 }

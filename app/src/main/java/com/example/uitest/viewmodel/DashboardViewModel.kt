@@ -1,26 +1,30 @@
 package com.example.uitest.viewmodel
 
+import android.app.Application
+import android.net.Uri
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
+import androidx.lifecycle.AndroidViewModel
 import com.example.uitest.data.LayoutConfig
 import com.example.uitest.data.LayoutRepository
 import com.example.uitest.data.ModuleConfig
-import com.example.uitest.data.Widget
-import android.app.Application
-import android.net.Uri
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.lifecycle.AndroidViewModel
 import com.example.uitest.data.ModuleData
+import com.example.uitest.data.Widget
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
 
 
+@RequiresApi(Build.VERSION_CODES.O)
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
     val uartManager = UartManager(application)
     val bluetoothManager = BluetoothClassicManager(application)
+    val cameraManager = CameraManager(application)
+    val sensorManager = SensorManager(application)
 
     private val server = DashboardServer(
         context = application,
@@ -33,7 +37,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             Json.encodeToString(currentLayout)
         },
         uartManager = uartManager,
-        bluetoothManager = bluetoothManager
+        bluetoothManager = bluetoothManager,
+        cameraManager = cameraManager,
+        sensorManager = sensorManager,
+        onLogReceived = { id, text ->
+            updateLogById(id.toIntOrNull() ?: -1, text)
+        }
     )
 
     init {
@@ -48,18 +57,16 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         uartManager.disconnect()
         uartManager.unregister()
         bluetoothManager.disconnect()
+        sensorManager.stopAll()
     }
-    var latestLine: String? = null
-        private set
 
-    fun updateLogModules(newText: String) {
+    fun updateLogById(id: Int, newText: String) {
         statePresets.forEach { preset ->
-            for (i in preset.indices) {
-                val module = preset[i]
-                if (module.type == "log") {
-                    // We use .copy() to trigger a recomposition in Compose
-                    preset[i] = module.copy(data = ModuleData(data = newText))
-                }
+            val index = preset.indexOfFirst { it.id == id }
+            if (index != -1) {
+                val module = preset[index]
+                // Update module data - this triggers recomposition because it's a SnapshotStateList
+                preset[index] = module.copy(data = ModuleData(data = newText))
             }
         }
     }
@@ -93,14 +100,14 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
 fun LayoutConfig.toStatePresets(): List<SnapshotStateList<ModuleConfig>> {
     return this.presets.values.map { widgetList ->
-        widgetList.map { widget ->
-            widget.toModuleConfig()
+        widgetList.mapIndexed { index, widget ->
+            widget.toModuleConfig(index)
         }.toMutableStateList()
     }
 }
-fun Widget.toModuleConfig(): ModuleConfig {
+fun Widget.toModuleConfig(index: Int): ModuleConfig {
     return ModuleConfig(
-        id = this.id,
+        id = index,
         type = this.type,
         spanX = this.spanX,
         aspRatio = this.aspRatio.toFloat()
@@ -109,13 +116,15 @@ fun Widget.toModuleConfig(): ModuleConfig {
 
 fun List<SnapshotStateList<ModuleConfig>>.toLayoutPresets(): Map<String, List<Widget>> {
     return this.mapIndexed { index, modules ->
-        "preset${index + 1}" to modules.map { it.toWidget() }
+        "preset${index + 1}" to modules.mapIndexed { modIndex, config -> 
+            config.toWidget(modIndex) 
+        }
     }.toMap()
 }
 
-fun ModuleConfig.toWidget(): Widget {
+fun ModuleConfig.toWidget(index: Int): Widget {
     return Widget(
-        id = id,
+        id = index,
         type = type,
         spanX = spanX,
         aspRatio = aspRatio.toDouble()

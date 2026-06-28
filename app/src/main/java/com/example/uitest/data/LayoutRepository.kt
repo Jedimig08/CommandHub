@@ -8,7 +8,7 @@ import java.io.File
 
 @Serializable
 data class Widget(
-    val id: String,
+    val id: Int,
     val type: String,
     val spanX: Int,
     val aspRatio: Double
@@ -46,8 +46,20 @@ class LayoutRepository(private val context: Context) {
     /** Load LayoutConfig from internal storage */
     fun loadLayout(): LayoutConfig {
         ensureFileExists()
-        val jsonString = file.readText()
-        return json.decodeFromString(jsonString)
+        return try {
+            val jsonString = file.readText()
+            json.decodeFromString(jsonString)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // If parsing fails (e.g. ID changed from String to Int), reset to default from assets
+            context.assets.open("layout.json").use { input ->
+                file.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            val jsonString = file.readText()
+            json.decodeFromString(jsonString)
+        }
     }
 
     /** Save LayoutConfig back to internal storage */

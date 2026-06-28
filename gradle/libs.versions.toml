@@ -14,6 +14,7 @@ foundationLayoutVersion = "1.10.4"
 foundation = "1.10.4"
 ktor = "3.0.0"
 usbSerial = "3.10.0"
+androidx-camera = "1.4.1"
 
 [libraries]
 
@@ -41,6 +42,10 @@ androidx-compose-foundation-layout = { group = "androidx.compose.foundation", na
 androidx-benchmark-traceprocessor = { group = "androidx.benchmark", name = "benchmark-traceprocessor", version.ref = "benchmarkTraceprocessor" }
 androidx-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayoutVersion" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
+androidx-camera-core = { group = "androidx.camera", name = "camera-core", version.ref = "androidx-camera" }
+androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "androidx-camera" }
+androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "androidx-camera" }
+androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "androidx-camera" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
