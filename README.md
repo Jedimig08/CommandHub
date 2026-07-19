@@ -110,6 +110,20 @@ The application supports communication with external devices using USB Serial (U
 
 The hardware layer was designed to remain modular so that additional communication methods and sensors can be integrated without requiring major changes to the rest of the application.
 
+### Hardware Managers
+
+One of the most important design decisions was separating each hardware interface into its own manager class.
+
+For example:
+
+- CameraManager controls camera initialization and image capture.
+- BluetoothManager manages Bluetooth discovery, connections, and data transfer.
+- UartManager handles USB serial communication with external microcontrollers.
+- SensorManager provides access to the device's built-in sensors, including the accelerometer, gyroscope, magnetometer, GPS, light sensor, and other available hardware sensors.
+- network.kt configures the application's embedded networking services, including the Ktor server and local network communication.
+
+Keeping these systems independent improves maintainability while making it easier to add support for additional communication protocols and hardware features in future versions.
+
 ### Networking
 
 CommandHub includes an embedded Ktor server that runs directly on the Android device.
@@ -155,6 +169,22 @@ Loads, saves, and manages dashboard configurations stored as JSON files.
 ### layout.json
 
 Contains the default dashboard layout used when the application starts. The dashboard can be modified by changing this configuration instead of editing source code.
+
+### BluetoothManager.kt
+Handles Bluetooth Classic device discovery, connection management, and bidirectional data communication.
+
+### UartManager.kt
+Provides USB Serial (UART) communication with compatible external devices such as Arduino and ESP32 boards.
+
+### CameraManager.kt
+Manages camera access and integrates camera functionality into the dashboard.
+
+### SensorManager.kt
+Interfaces with Android's SensorManager API to collect data from available device sensors such as the accelerometer, gyroscope, magnetometer, GPS, light sensor, and barometer when supported by the hardware.
+
+### network.kt
+Initializes and configures the embedded Ktor server used for HTTP, WebSocket communication, and local network services.
+
 
 ## Challenges
 
