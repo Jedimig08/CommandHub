@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ui test"
+rootProject.name = "commandhub"
 include(":app")
