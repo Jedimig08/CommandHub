@@ -193,3 +193,21 @@ This project was developed primarily by me. During development, I used AI-assist
 - Improve project documentation and the README
 
 All architectural decisions, feature design, integration, testing, debugging, and the final implementation were completed by me. AI tools were used to assist my learning and productivity, not to replace my own work, in accordance with the CS50 AI policy.
+
+## Building the Project
+
+### Requirements
+
+- Android Studio Meerkat or newer
+- Android SDK 35
+- Kotlin
+- Gradle
+
+### Build
+
+1. Clone the repository.
+2. Open the project in Android Studio.
+3. Allow Gradle to sync.
+4. Run the application on a physical Android device or emulator.
+
+Some hardware-related features such as USB Serial, Bluetooth, and sensors require a physical Android device.
