@@ -62,32 +62,31 @@ The project follows a modular architecture where different responsibilities are 
         ┌────────────────────┼────────────────────┐
         │                    │                    │
         ▼                    ▼                    ▼
-   Layout Engine      Configuration       State Management
-     (JSON)             Repository          (StateFlow)
+   Dashboard Engine     Configuration      State Management
+      (JSON)             Repository          (StateFlow)
 
                              │
                              ▼
-                    Hardware Abstraction Layer
+                  Hardware & Services Layer
                              │
- ┌──────────┬──────────┬──────────┬──────────┬──────────┬──────────┐
- │          │          │          │          │          │          │
- ▼          ▼          ▼          ▼          ▼          ▼          ▼
-Bluetooth   UART     Cameras    Sensors    Network     Storage   Location
- Manager   Manager   Manager      API      Services    Manager      GPS
-                                    │
-                                    ▼
-                    Accelerometer • Gyroscope
-                  Magnetometer • Orientation
-                    Barometer • Light • etc.
+ ┌──────────┬──────────┬──────────┬──────────┬──────────┐
+ │          │          │          │          │          │
+ ▼          ▼          ▼          ▼          ▼
+Bluetooth   UART     Camera    Sensors   Networking
+             USB                GPS
+                              IMU
+                              Compass
+                              Barometer
+                              Light
 
                              │
                              ▼
-                       Embedded Ktor Server
+                    Embedded Ktor Web Server
                              │
-            HTTP • WebSockets • mDNS Discovery
+                    HTTP • WebSockets • mDNS
                              │
                              ▼
-                    Browser / Remote Clients
+                  Browser / Remote Dashboard
 ```
 
 
@@ -103,17 +102,13 @@ The data package contains the models and repository classes responsible for load
 
 Dashboard layouts are stored as JSON files. This design makes it possible to create new interfaces simply by editing configuration files instead of modifying source code.
 
-### Hardware Managers
+### Hardware Integration
 
-One of the most important design decisions was separating each hardware interface into its own manager.
+A major goal of CommandHub is to provide a unified interface for interacting with both external hardware and the sensors built into an Android device.
 
-For example:
+The application supports communication with external devices using USB Serial (UART) and Bluetooth while also exposing data from the phone's onboard sensors. These include motion sensors such as the accelerometer and gyroscope, environmental sensors when available, GPS location, camera access, and other Android hardware APIs.
 
-- CameraManager controls camera initialization and streaming.
-- BluetoothClassicManager manages Bluetooth discovery, connection, and communication.
-- UartManager handles USB serial devices and terminal communication.
-
-Keeping these systems independent improves maintainability while making it easier to add support for additional communication protocols in future versions.
+The hardware layer was designed to remain modular so that additional communication methods and sensors can be integrated without requiring major changes to the rest of the application.
 
 ### Networking
 
@@ -134,6 +129,32 @@ Compose allows the dashboard to be generated dynamically from configuration data
 Another important decision was separating hardware communication into dedicated manager classes. Rather than placing Bluetooth, USB, networking, and camera logic inside a single large activity, each subsystem has its own implementation. This keeps responsibilities clearly separated and improves code readability.
 
 The project also makes extensive use of Kotlin Coroutines and StateFlow. Hardware communication is naturally asynchronous, and reactive programming allows the interface to update automatically whenever new information is received.
+
+## Important Files
+
+### MainActivity.kt
+
+The application's entry point. It initializes the user interface, requests runtime permissions, and starts the main dashboard.
+
+### DashboardViewModel.kt
+
+Maintains the application's state and coordinates communication between the user interface, hardware components, and background services.
+
+### DashboardPager.kt
+
+Provides navigation between dashboard pages and allows multiple configurable layouts.
+
+### DashboardPage.kt
+
+Defines the individual dashboard screens and renders widgets using Jetpack Compose.
+
+### LayoutRepository.kt
+
+Loads, saves, and manages dashboard configurations stored as JSON files.
+
+### layout.json
+
+Contains the default dashboard layout used when the application starts. The dashboard can be modified by changing this configuration instead of editing source code.
 
 ## Challenges
 
@@ -183,7 +204,7 @@ The project also reinforced the importance of planning, refactoring, documentati
 
 ## AI Usage
 
-This project was developed primarily by me. During development, I used AI-assisted programming tools, including ChatGPT and the built-in Gemini assistant in Android Studio, as development aids. These tools were used to:
+This project was designed and implemented by me. During development, I used AI-assisted programming tools, including ChatGPT and the built-in Gemini assistant in Android Studio, as development aids. These tools were used to:
 
 - Explain Android and Kotlin APIs
 - Help understand Jetpack Compose concepts
@@ -211,3 +232,9 @@ All architectural decisions, feature design, integration, testing, debugging, an
 4. Run the application on a physical Android device or emulator.
 
 Some hardware-related features such as USB Serial, Bluetooth, and sensors require a physical Android device.
+
+## Conclusion
+
+CommandHub represents the culmination of the concepts I learned throughout CS50 while exploring Android development beyond the scope of the course. It combines modern Android development practices, hardware communication, networking, asynchronous programming, and software architecture into a single extensible application.
+
+Although the project is already functional, I intend to continue developing it beyond CS50 by adding additional communication protocols, telemetry visualization, and a fully configurable dashboard editor.
