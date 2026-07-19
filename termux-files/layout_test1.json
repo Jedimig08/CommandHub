@@ -1,9 +1,0 @@
-{
-  "type": "LAYOUT",
-  "columns": 2,
-  "presets": {
-    "preset1": [
-      { "id": "card1", "type": "log", "spanX": 2, "aspRatio": 1.5 }
-    ]
-  }
-}
