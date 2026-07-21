@@ -261,8 +261,28 @@ All architectural decisions, feature design, integration, testing, debugging, an
 3. Allow Gradle to sync.
 4. Run the application on a physical Android device.
 
-⚠ if you want to go to the android web server page using the program android_domain.py you need to have python and zeroconf installed.
-You can install zeroconf if you have python by running "pip install zeroconf"⚠
+### Optional Companion Utility
+
+The repository also includes `android_domain.py`, a small Python utility that automatically discovers the embedded web server running on CommandHub using mDNS (ZeroConf). Once the application is discovered on the local network, the script automatically opens the dashboard in your default web browser.
+
+#### Requirements
+
+- Python 3
+- zeroconf
+
+Install the required package with:
+
+```bash
+pip install zeroconf
+```
+
+Then run:
+
+```bash
+python android_domain.py
+```
+
+The utility works on Windows, Linux, and macOS, provided mDNS (Bonjour/ZeroConf) is available on the system.
 
 ## Conclusion
 
