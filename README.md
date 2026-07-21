@@ -259,9 +259,10 @@ All architectural decisions, feature design, integration, testing, debugging, an
 1. Clone the repository.
 2. Open the project in Android Studio.
 3. Allow Gradle to sync.
-4. Run the application on a physical Android device or emulator.
+4. Run the application on a physical Android device.
 
-Some hardware-related features such as USB Serial, Bluetooth, and sensors require a physical Android device.
+⚠ if you want to go to the android web server page using the program android_domain.py you need to have python and zeroconf installed.
+You can install zeroconf if you have python by running "pip install zeroconf"⚠
 
 ## Conclusion
 
