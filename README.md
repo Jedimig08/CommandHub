@@ -2,13 +2,29 @@
 
 #### Video Demo: https://youtu.be/YOUR_VIDEO_URL
 
+## Why I Built CommandHub
+
+The idea for CommandHub came from two observations.
+
+First, modern Android phones are remarkably capable computers that already contain a powerful collection of hardware, including high-resolution cameras, Bluetooth, Wi-Fi, USB OTG support, GPS, accelerometers, gyroscopes, magnetometers, and many other sensors. Despite this, many perfectly functional Android devices end up sitting unused in drawers after being replaced.
+
+Second, building a robotics or embedded systems project often requires purchasing a Raspberry Pi together with additional hardware such as a camera module, wireless communication adapters, GPS, and various sensors. Even purchasing a used Android phone can often cost less than buying these components separately, while already including most of them in a single compact device.
+
+This made me wonder: instead of buying dedicated hardware, why not turn an Android phone into the hardware?
+
+Since many people already own an unused Android device, or can obtain one inexpensively, I wanted to explore using it as an affordable yet capable robotics companion. Combined with applications such as **Termux**, an Android phone can run Linux tools, scripts, and development utilities locally acting kinda like a raspberry pi while CommandHub provides access to its communication interfaces, sensors, camera, and networking capabilities. The phone can also expose its embedded web server, allowing it to be monitored and controlled remotely from another computer through a web browser.
+
+During development I also found myself constantly switching between multiple applications: one for USB serial communication, another for Bluetooth, another for viewing camera streams, another for monitoring sensors, and sometimes a browser for accessing a local web server. This workflow quickly became inconvenient and difficult to manage.
+
+CommandHub was created to solve both of these problems. It transforms an Android phone into a modular control station by bringing communication, monitoring, networking, and hardware interfaces together in a single extensible application.
+
 ## Description
 
-CommandHub is an Android application designed to serve as a central control station for robotics, embedded systems, and hardware development projects. It combines multiple communication methods, hardware interfaces, and monitoring tools into a single customizable application, allowing developers to interact with microcontrollers and other devices without switching between several separate applications.
+CommandHub is an Android application designed to serve as a central control station for robotics, embedded systems, and hardware development projects. It combines multiple communication methods, hardware interfaces, and monitoring tools into a single customizable application, allowing developers to interact with microcontrollers and other devices without constantly switching between separate applications.
 
-The original motivation behind this project came from my own experience working with Arduino, ESP32, and robotics projects. During development I often found myself opening multiple applications simultaneously: one for USB serial communication, another for Bluetooth, another for viewing camera streams, and sometimes a browser for accessing a web server. This workflow quickly became inconvenient and difficult to manage. CommandHub was created to solve this problem by bringing these tools together into one modular Android application.
+During development I also found myself repeatedly opening multiple applications: one for USB serial communication, another for Bluetooth, another for viewing camera streams, and sometimes a browser for accessing a local web server. This workflow quickly became inconvenient and difficult to manage. CommandHub was created to bring these capabilities together into one modular Android application that can serve as a portable control station for robotics and embedded systems.
 
-Unlike many hardware utility applications that provide only one function, CommandHub was designed from the beginning to be extensible. Rather than creating a fixed interface, the application uses configurable dashboard layouts stored as JSON files. This allows different dashboards to be loaded without modifying the application's source code. The long-term goal is to create a platform that can adapt to many different robotics and embedded projects instead of being tied to one specific device.
+Rather than creating a fixed interface, CommandHub was designed from the beginning to be extensible. Dashboard layouts are generated from configurable JSON files, allowing different interfaces to be loaded without modifying the application's source code. The application can be used entirely on the Android device, alongside tools such as Termux, or remotely from another computer through its embedded Ktor web server and companion desktop discovery utility. The long-term goal is to create a flexible platform that adapts to many different robotics and embedded projects instead of being tied to a single device or workflow.
 
 ## Features
 
