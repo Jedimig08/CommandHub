@@ -8,16 +8,13 @@ import android.hardware.SensorManager as AndroidSensorManager
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
 
 @Serializable
 data class SensorData(
     val type: Int,
     val timestamp: Long,
-    val values: List<Float>
+    val values: List<Float>,
 )
 
 @Serializable
@@ -26,7 +23,7 @@ data class SensorInfo(
     val name: String,
     val vendor: String,
     val type: Int,
-    val stringType: String
+    val stringType: String,
 )
 
 class SensorManager(context: Context) {
@@ -54,7 +51,7 @@ class SensorManager(context: Context) {
                             val data = SensorData(
                                 type = it.sensor.type,
                                 timestamp = it.timestamp,
-                                values = it.values.toList()
+                                values = it.values.toList(),
                             )
                             flow.tryEmit(data)
                         }

@@ -11,13 +11,13 @@ data class Widget(
     val id: Int,
     val type: String,
     val spanX: Int,
-    val aspRatio: Double
+    val aspRatio: Double,
 )
 
 @Serializable
 data class LayoutConfig(
     val columns: Int,
-    val presets: Map<String, List<Widget>>
+    val presets: Map<String, List<Widget>>,
 )
 
 class LayoutRepository(private val context: Context) {

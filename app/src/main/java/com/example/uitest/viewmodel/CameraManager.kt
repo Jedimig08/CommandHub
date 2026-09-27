@@ -46,7 +46,7 @@ data class CameraInfo(
     val type: String,
     val focalLength: Float,
     val isPhysical: Boolean = true,
-    val supportedResolutions: List<Resolution> = emptyList()
+    val supportedResolutions: List<Resolution> = emptyList(),
 )
 
 class CameraManager(private val context: Context) {
@@ -61,9 +61,10 @@ class CameraManager(private val context: Context) {
 
     init {
         val future = ProcessCameraProvider.getInstance(context)
-        future.addListener({
-            cameraProvider = future.get()
-        }, ContextCompat.getMainExecutor(context))
+        future.addListener(
+            { cameraProvider = future.get() },
+            ContextCompat.getMainExecutor(context),
+        )
     }
 
     fun isReady(): Boolean = cameraProvider != null
@@ -74,13 +75,13 @@ class CameraManager(private val context: Context) {
             MutableSharedFlow(
                 replay = 0,
                 extraBufferCapacity = 5,
-                onBufferOverflow = BufferOverflow.DROP_OLDEST
+                onBufferOverflow = BufferOverflow.DROP_OLDEST,
             )
         }
         
         lastLifecycleOwner?.let { owner ->
             mainHandler.post {
-                if (activeCameraId != cameraId || (activeResolution?.width != width) || (activeResolution?.height != height)) {
+                if ((activeCameraId != cameraId) || (activeResolution?.width != width) || (activeResolution?.height != height)) {
                     startCamera(owner, cameraId, width, height)
                 }
             }
@@ -134,7 +135,7 @@ class CameraManager(private val context: Context) {
 
         try {
             provider.bindToLifecycle(lifecycleOwner, selector, analysis)
-            Log.d("CameraManager", "Bound camera $cameraId at ${width}x${height}")
+            Log.d("CameraManager", "Bound camera $cameraId at ${width}x$height")
         } catch (e: Exception) {
             Log.e("CameraManager", "Failed to bind camera $cameraId", e)
         }
@@ -147,14 +148,14 @@ class CameraManager(private val context: Context) {
         manager.cameraIdList.forEach { id ->
             try {
                 val c = manager.getCameraCharacteristics(id)
-                val facingInt = c.get(CameraCharacteristics.LENS_FACING)
+                val facingInt = c[CameraCharacteristics.LENS_FACING]
                 val facing = when (facingInt) {
                     CameraCharacteristics.LENS_FACING_FRONT -> "Front"
                     CameraCharacteristics.LENS_FACING_BACK -> "Back"
                     else -> "External"
                 }
 
-                val focalLengths = c.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+                val focalLengths = c[CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS]
                 val focal = focalLengths?.maxOrNull() ?: 0f
                 val type = when {
                     focal < 2.2f -> "UltraWide"
@@ -162,31 +163,31 @@ class CameraManager(private val context: Context) {
                     else -> "Telephoto"
                 }
 
-                val capabilities = c.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)
+                val capabilities = c[CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES]
                 val isLogical = capabilities?.any { it == 11 } == true
 
-                val map = c.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-                val resolutions = map?.getOutputSizes(ImageFormat.YUV_420_888)?.map { 
+                val map = c[CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP]
+                val resolutions = map?.getOutputSizes(ImageFormat.YUV_420_888)?.asSequence()?.map { 
                     Resolution(it.width, it.height) 
-                }?.sortedByDescending { it.width * it.height } ?: emptyList()
+                }?.sortedByDescending { it.width * it.height }?.toList() ?: emptyList()
 
                 result.add(CameraInfo(id, facing, type, focal, !isLogical, resolutions))
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && isLogical) {
                     c.physicalCameraIds.forEach { pId ->
                         val pC = manager.getCameraCharacteristics(pId)
-                        val pFocal = pC.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.maxOrNull() ?: 0f
+                        val pFocal = pC[CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS]?.maxOrNull() ?: 0f
                         val pType = when {
                             pFocal < 2.2f -> "UltraWide"
                             pFocal < 5.8f -> "Wide"
                             else -> "Telephoto"
                         }
-                        val pMap = pC.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-                        val pResolutions = pMap?.getOutputSizes(ImageFormat.YUV_420_888)?.map { 
+                        val pMap = pC[CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP]
+                        val pResolutions = pMap?.getOutputSizes(ImageFormat.YUV_420_888)?.asSequence()?.map { 
                             Resolution(it.width, it.height) 
-                        }?.sortedByDescending { it.width * it.height } ?: emptyList()
+                        }?.sortedByDescending { it.width * it.height }?.toList() ?: emptyList()
                         
-                        result.add(CameraInfo("$id:$pId", facing, "$pType (Sensor $pId)", pFocal, true, pResolutions))
+                        result.add(CameraInfo("$id:$pId", facing, "$pType (Sensor $pId)", pFocal, isPhysical = true, pResolutions))
                     }
                 }
             } catch (e: Exception) {

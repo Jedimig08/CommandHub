@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 data class PairedDeviceInfo(val name: String, val address: String)
 
 @SuppressLint("MissingPermission")
-class BluetoothClassicManager(private val context: Context) {
+class BluetoothClassicManager(context: Context) {
 
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
@@ -27,7 +27,7 @@ class BluetoothClassicManager(private val context: Context) {
     private var inputStream: InputStream? = null
     private var isRunning = false
 
-    private val SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+    private val sppUuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
     // Flow for real-time WebSocket push
     private val _dataFlow = MutableSharedFlow<String>(extraBufferCapacity = 100)
@@ -55,7 +55,7 @@ class BluetoothClassicManager(private val context: Context) {
         return try {
             disconnect()
             // Use Insecure socket for lower latency on older hardware
-            socket = device.createInsecureRfcommSocketToServiceRecord(SPP_UUID)
+            socket = device.createInsecureRfcommSocketToServiceRecord(sppUuid)
             socket?.connect()
             
             outputStream = socket?.outputStream
@@ -107,6 +107,7 @@ class BluetoothClassicManager(private val context: Context) {
         }
     }
 
+    @Suppress("Unused")
     fun getBuffer(): String {
         synchronized(bufferLock) {
             val data = incomingBuffer.toString()

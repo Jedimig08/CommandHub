@@ -1,9 +1,13 @@
 package com.example.uitest.ui
 
+import android.graphics.BitmapFactory
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,18 +18,29 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,33 +49,27 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.uitest.data.ModuleConfig
 import com.example.uitest.util.moveModule
 import com.example.uitest.viewmodel.DashboardViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
-
-import androidx.compose.foundation.Image
-import androidx.compose.runtime.collectAsState
-import androidx.compose.ui.graphics.asImageBitmap
-import android.graphics.BitmapFactory
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardPage(
     modules: SnapshotStateList<ModuleConfig>,
+    pageIndex: Int = 0,
+    totalPages: Int = 1,
     viewModel: DashboardViewModel = viewModel(),
 ) {
+    val context = LocalContext.current
     var selectedModule: ModuleConfig? by remember { mutableStateOf(null) }
+    var showSettingsSheet by remember { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -68,10 +77,6 @@ fun DashboardPage(
         uri?.let {
             viewModel.importLayout(it)
         }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.loadLayout()
     }
 
     LazyVerticalGrid(
@@ -82,29 +87,30 @@ fun DashboardPage(
         contentPadding = PaddingValues(8.dp)
     ) {
         item(span = { GridItemSpan(viewModel.columns) }) {
-            Row(
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             ) {
-                Button(
-                    onClick = {
-                        modules.add(ModuleConfig(
-                            id = modules.size,
-                            type = "LOG",
-                            spanX = 1,
-                            aspRatio = 1f,
-                            color = Color.Gray
-                        ))
-                    }, 
-                    modifier = Modifier.weight(1f)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Add Module")
-                }
-                
-                Button(onClick = {
-                    if (modules.isNotEmpty()) modules.removeAt(modules.lastIndex)
-                }, modifier = Modifier.weight(1f)) {
-                    Text("Remove Last")
+                    Text(
+                        text = "Layout Page ${pageIndex + 1} / $totalPages",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Button(
+                        onClick = { showSettingsSheet = true }
+                    ) {
+                        Text("⚙ Settings")
+                    }
                 }
             }
         }
@@ -124,6 +130,216 @@ fun DashboardPage(
                 selectedModule = it 
             }
 
+        }
+    }
+
+    if (showSettingsSheet) {
+        val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+        ModalBottomSheet(
+            onDismissRequest = { showSettingsSheet = false },
+            sheetState = settingsSheetState,
+            modifier = Modifier.imePadding()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
+                    .navigationBarsPadding()
+            ) {
+                Text(
+                    text = "Settings",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Keep Screen Awake toggle & Domain Publication
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Keep Screen On",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Prevent phone from sleeping (like YouTube)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = viewModel.keepScreenOn,
+                                onCheckedChange = { viewModel.setKeepScreenOnEnabled(it) }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = "Domain Publication (mDNS)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Re-broadcast 'command-hub' service on local network",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                viewModel.publishDomain()
+                                Toast.makeText(context, "Domain publication sent", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Publish Domain")
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Layout Management
+                Text(
+                    text = "Layout Management",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Current Page: ${pageIndex + 1} of $totalPages",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { viewModel.addLayoutPreset() },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Add Layout")
+                    }
+
+                    Button(
+                        onClick = { viewModel.removeLayoutPreset(pageIndex) },
+                        enabled = totalPages > 1,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Remove Layout")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Grid Columns adjustment
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Grid Columns: ${viewModel.columns}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.updateColumns(viewModel.columns - 1) },
+                            enabled = viewModel.columns > 1
+                        ) {
+                            Text("-")
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.updateColumns(viewModel.columns + 1) },
+                            enabled = viewModel.columns < 8
+                        ) {
+                            Text("+")
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { viewModel.saveLayout() },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Save Layout")
+                    }
+
+                    Button(
+                        onClick = { launcher.launch("application/json") },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Import Layout")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Module Management
+                Text(
+                    text = "Modules on Current Page",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { viewModel.addModuleToPreset(pageIndex) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Add Module")
+                    }
+
+                    Button(
+                        onClick = { viewModel.removeLastModuleFromPreset(pageIndex) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Remove Last")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+            }
         }
     }
 

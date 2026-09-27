@@ -22,11 +22,11 @@ class MainActivity : ComponentActivity() {
         setContent {
 
             val launcher = rememberLauncherForActivityResult(
-                ActivityResultContracts.RequestPermission()
+                ActivityResultContracts.RequestPermission(),
             ) { isGranted ->
                 if (isGranted) {
                     viewModel.cameraManager.startSupportedCameras(
-                        this@MainActivity
+                        this@MainActivity,
                     )
                 }
             }
@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
                 val status = ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.CAMERA)
                 if (status == PackageManager.PERMISSION_GRANTED) {
                     viewModel.cameraManager.startSupportedCameras(
-                        this@MainActivity
+                        this@MainActivity,
                     )
                 } else {
                     launcher.launch(android.Manifest.permission.CAMERA)
@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
                 viewModel.loadLayout()
             }
 
-            DashboardPager(presets = viewModel.statePresets)
+            DashboardPager(viewModel = viewModel)
         }
     }
 }

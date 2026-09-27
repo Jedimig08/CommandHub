@@ -1,9 +1,12 @@
 package com.example.uitest.viewmodel
 
 import android.app.Application
+import android.content.Context
+import androidx.core.content.edit
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -22,7 +25,29 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     val bluetoothManager = BluetoothClassicManager(application)
     val cameraManager = CameraManager(application)
     val sensorManager = SensorManager(application)
-    val tcpManager = TcpManager(application)
+    val tcpManager = TcpManager()
+
+    private val repo = LayoutRepository(application)
+    private val prefs = application.getSharedPreferences("dashboard_prefs", Context.MODE_PRIVATE)
+
+    var keepScreenOn by mutableStateOf(prefs.getBoolean("keep_screen_on", true))
+        private set
+
+    var statePresets by mutableStateOf<List<SnapshotStateList<ModuleConfig>>>(emptyList())
+        private set
+
+    var columns by mutableIntStateOf(4)
+
+    fun setKeepScreenOnEnabled(enabled: Boolean) {
+        keepScreenOn = enabled
+        prefs.edit {
+            putBoolean("keep_screen_on", enabled)
+        }
+    }
+
+    fun publishDomain() {
+        server.registerService()
+    }
 
     private val server = DashboardServer(
         context = application,
@@ -38,12 +63,13 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         bluetoothManager = bluetoothManager,
         cameraManager = cameraManager,
         sensorManager = sensorManager,
-        tcpManager = tcpManager
+        tcpManager = tcpManager,
     ) { id, text ->
         updateLogById(id.toIntOrNull() ?: -1, text)
     }
 
     init {
+        loadLayout()
         server.start()
         // Automatically try to connect to UART on start
         uartManager.connect()
@@ -70,12 +96,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
     }
-    private val repo = LayoutRepository(application)
-
-    var statePresets by mutableStateOf<List<SnapshotStateList<ModuleConfig>>>(emptyList())
-        private set
-
-    var columns by mutableIntStateOf(4)
 
     fun loadLayout() {
         val layout = repo.loadLayout()
@@ -86,7 +106,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     fun saveLayout() {
         val layout = LayoutConfig(
             columns = columns,
-            presets = statePresets.toLayoutPresets()
+            presets = statePresets.toLayoutPresets(),
         )
 
         repo.saveLayout(layout)
@@ -95,6 +115,59 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     fun importLayout(uri: Uri) {
         repo.importLayout(uri)
         loadLayout()
+    }
+
+    fun addLayoutPreset() {
+        val newPreset = mutableStateListOf(
+            ModuleConfig(
+                id = 0,
+                type = "LOG",
+                spanX = 1,
+                aspRatio = 1f,
+            ),
+        )
+        statePresets = statePresets + listOf(newPreset)
+        saveLayout()
+    }
+
+    fun removeLayoutPreset(index: Int) {
+        if ((statePresets.size > 1) && (index in statePresets.indices)) {
+            val newList = statePresets.toMutableList()
+            newList.removeAt(index)
+            statePresets = newList
+            saveLayout()
+        }
+    }
+
+    fun updateColumns(newColumns: Int) {
+        val coerced = newColumns.coerceIn(1, 8)
+        columns = coerced
+        saveLayout()
+    }
+
+    fun addModuleToPreset(presetIndex: Int) {
+        if (presetIndex in statePresets.indices) {
+            val modules = statePresets[presetIndex]
+            modules.add(
+                ModuleConfig(
+                    id = modules.size,
+                    type = "LOG",
+                    spanX = 1,
+                    aspRatio = 1f,
+                ),
+            )
+            saveLayout()
+        }
+    }
+
+    fun removeLastModuleFromPreset(presetIndex: Int) {
+        if (presetIndex in statePresets.indices) {
+            val modules = statePresets[presetIndex]
+            if (modules.isNotEmpty()) {
+                modules.removeAt(modules.lastIndex)
+                saveLayout()
+            }
+        }
     }
 }
 
@@ -110,7 +183,7 @@ fun Widget.toModuleConfig(index: Int): ModuleConfig {
         id = index,
         type = this.type,
         spanX = this.spanX,
-        aspRatio = this.aspRatio.toFloat()
+        aspRatio = this.aspRatio.toFloat(),
     )
 }
 
@@ -127,6 +200,6 @@ fun ModuleConfig.toWidget(index: Int): Widget {
         id = index,
         type = type,
         spanX = spanX,
-        aspRatio = aspRatio.toDouble()
+        aspRatio = aspRatio.toDouble(),
     )
 }

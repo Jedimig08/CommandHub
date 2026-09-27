@@ -47,20 +47,20 @@ class DashboardServer(
     private val cameraManager: CameraManager,
     private val sensorManager: SensorManager,
     private val tcpManager: TcpManager,
-    private val onLogReceived: (String, String) -> Unit
+    private val onLogReceived: (String, String) -> Unit,
 ) {
 
     private fun isValidBluetoothInput(text: String): Boolean {
-        return text.isNotBlank() &&
-                text.length <= 200 &&
-                !text.startsWith("__")
+        return (text.isNotBlank()) &&
+                (text.length <= 200) &&
+                (!text.startsWith("__"))
     }
 
     private fun terminalPage(
         title: String,
         wsEndpoint: String,
         sendEndpoint: String,
-        extraControls: String = ""
+        extraControls: String = "",
     ): String {
 
         return """
@@ -288,7 +288,7 @@ class DashboardServer(
             val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
-                "CommandHub:WakeLock"
+                "CommandHub:WakeLock",
             ).apply {
                 setReferenceCounted(false)
                 acquire(10 * 60 * 1000L)
@@ -399,9 +399,9 @@ class DashboardServer(
                             title = "Bluetooth Control",
                             wsEndpoint = "/bluetooth-ws",
                             sendEndpoint = "/bluetooth-send",
-                            extraControls = controls
+                            extraControls = controls,
                         ),
-                        ContentType.Text.Html
+                        ContentType.Text.Html,
                     )
                 }
 
@@ -480,8 +480,8 @@ class DashboardServer(
                     }
                     try {
                         incoming.consumeEach { frame ->
-                            if (frame is Frame.Text) {
-                                tcpManager.send(frame.readText())
+                            (frame as? Frame.Text)?.let {
+                                tcpManager.send(it.readText())
                             }
                         }
                     } finally {
@@ -527,8 +527,8 @@ class DashboardServer(
                     }
                     try {
                         incoming.consumeEach { frame ->
-                            if (frame is Frame.Text) {
-                                uartManager.send(frame.readText())
+                            (frame as? Frame.Text)?.let {
+                                uartManager.send(it.readText())
                             }
                         }
                     } finally {
@@ -558,8 +558,8 @@ class DashboardServer(
                     val cameras = cameraManager.getCameraInfos()
 
                     val cameraRows = cameras.joinToString("") { info ->
-                        val resLinks = info.supportedResolutions.take(8).joinToString(" ") { res ->
-                            "<a href='/stream/${info.id}?res=${res.width}x${res.height}' style='color:#007AFF; text-decoration:none; font-size:0.85em; margin-right:5px;'>[${res}]</a>"
+                        val resLinks = info.supportedResolutions.asSequence().take(8).joinToString(" ") { res ->
+                            "<a href='/stream/${info.id}?res=${res.width}x${res.height}' style='color:#007AFF; text-decoration:none; font-size:0.85em; margin-right:5px;'>[$res]</a>"
                         }
                         """
                         <tr>
@@ -610,7 +610,7 @@ class DashboardServer(
                     val cameras = cameraManager.getCameraInfos()
                     val currentCamera = cameras.find { it.id == cameraId }
                     
-                    val otherCamerasLinks = cameras.filter { it.id != cameraId }.joinToString(" | ") { 
+                    val otherCamerasLinks = cameras.asSequence().filter { it.id != cameraId }.joinToString(" | ") {
                         "<a href='/camera/${it.id}'>Camera ${it.id}</a>" 
                     }
 
@@ -824,8 +824,17 @@ class DashboardServer(
         }
     }
 
-    private fun registerService(port: Int) {
+    fun registerService(port: Int = this.port) {
         nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+
+        registrationListener?.let {
+            try {
+                nsdManager?.unregisterService(it)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            registrationListener = null
+        }
 
         val serviceInfo = NsdServiceInfo().apply {
             serviceName = this@DashboardServer.serviceName
@@ -843,11 +852,15 @@ class DashboardServer(
             override fun onUnregistrationFailed(info: NsdServiceInfo, error: Int) {}
         }
 
-        nsdManager?.registerService(
-            serviceInfo,
-            NsdManager.PROTOCOL_DNS_SD,
-            registrationListener
-        )
+        try {
+            nsdManager?.registerService(
+                serviceInfo,
+                NsdManager.PROTOCOL_DNS_SD,
+                registrationListener
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun stop() {

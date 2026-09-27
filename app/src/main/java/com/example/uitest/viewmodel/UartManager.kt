@@ -21,7 +21,7 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
     private var serialPort: UsbSerialPort? = null
     private var ioManager: SerialInputOutputManager? = null
 
-    private val ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION"
+    private val actionUsbPermission = "com.android.example.USB_PERMISSION"
 
     // Flow for real-time WebSocket push
     private val _dataFlow = MutableSharedFlow<String>(extraBufferCapacity = 100)
@@ -36,7 +36,7 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
 
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (ACTION_USB_PERMISSION == intent.action) {
+            if (actionUsbPermission == intent.action) {
                 synchronized(this) {
                     val device: UsbDevice? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                         intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
@@ -58,12 +58,12 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
     }
 
     init {
-        val filter = IntentFilter(ACTION_USB_PERMISSION)
+        val filter = IntentFilter(actionUsbPermission)
         ContextCompat.registerReceiver(
             context,
             usbReceiver,
             filter,
-            ContextCompat.RECEIVER_NOT_EXPORTED
+            ContextCompat.RECEIVER_NOT_EXPORTED,
         )
     }
 
@@ -78,7 +78,7 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
         if (!usbManager.hasPermission(device)) {
             val flags = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) 
                 PendingIntent.FLAG_MUTABLE else 0
-            val intent = PendingIntent.getBroadcast(context, 0, Intent(ACTION_USB_PERMISSION), flags)
+            val intent = PendingIntent.getBroadcast(context, 0, Intent(actionUsbPermission), flags)
             usbManager.requestPermission(device, intent)
             return "Requesting USB permission..."
         }
@@ -110,6 +110,7 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
         }
     }
 
+    @Suppress("Unused")
     fun getBuffer(): String {
         synchronized(bufferLock) {
             val data = incomingBuffer.toString()

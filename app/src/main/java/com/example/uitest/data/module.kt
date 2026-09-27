@@ -9,15 +9,16 @@ data class ModuleConfig(
     val spanX: Int,
     val aspRatio: Float,
     val color: Color = Color.DarkGray,
-    val data: ModuleData? = null
+    val data: ModuleData? = null,
 )
 
 data class ModuleData(
-    val data: String?
+    val data: String?,
 )
 
+@Suppress("Unused")
 @Serializable
 data class TermuxMessage(
     val type: String, // "LAYOUT" or "LOG"
-    val content: String // The actual JSON string or raw text
+    val content: String, // The actual JSON string or raw text
 )
