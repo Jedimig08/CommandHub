@@ -1,5 +1,6 @@
 package com.example.uitest.ui
 
+import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -23,22 +24,13 @@ class MainActivity : ComponentActivity() {
 
             val launcher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission(),
-            ) { isGranted ->
-                if (isGranted) {
-                    viewModel.cameraManager.startSupportedCameras(
-                        this@MainActivity,
-                    )
-                }
-            }
+            ) { _ -> }
 
             LaunchedEffect(Unit) {
-                val status = ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.CAMERA)
-                if (status == PackageManager.PERMISSION_GRANTED) {
-                    viewModel.cameraManager.startSupportedCameras(
-                        this@MainActivity,
-                    )
-                } else {
-                    launcher.launch(android.Manifest.permission.CAMERA)
+                viewModel.cameraManager.setLifecycleOwner(this@MainActivity)
+                val status = ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CAMERA)
+                if (status != PackageManager.PERMISSION_GRANTED) {
+                    launcher.launch(Manifest.permission.CAMERA)
                 }
                 viewModel.loadLayout()
             }

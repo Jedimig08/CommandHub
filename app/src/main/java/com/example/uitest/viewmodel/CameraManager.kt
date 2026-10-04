@@ -1,7 +1,6 @@
 package com.example.uitest.viewmodel
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
@@ -62,9 +61,25 @@ class CameraManager(private val context: Context) {
     init {
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener(
-            { cameraProvider = future.get() },
+            {
+                cameraProvider = future.get()
+                lastLifecycleOwner?.let { owner ->
+                    activeCameraId?.let { id ->
+                        val res = activeResolution ?: Resolution(640, 480)
+                        startCamera(owner, id, res.width, res.height)
+                    }
+                }
+            },
             ContextCompat.getMainExecutor(context),
         )
+    }
+
+    fun setLifecycleOwner(lifecycleOwner: LifecycleOwner) {
+        lastLifecycleOwner = lifecycleOwner
+        activeCameraId?.let { id ->
+            val res = activeResolution ?: Resolution(640, 480)
+            startCamera(lifecycleOwner, id, res.width, res.height)
+        }
     }
 
     fun isReady(): Boolean = cameraProvider != null
@@ -79,8 +94,8 @@ class CameraManager(private val context: Context) {
             )
         }
         
-        lastLifecycleOwner?.let { owner ->
-            mainHandler.post {
+        mainHandler.post {
+            lastLifecycleOwner?.let { owner ->
                 if ((activeCameraId != cameraId) || (activeResolution?.width != width) || (activeResolution?.height != height)) {
                     startCamera(owner, cameraId, width, height)
                 }
@@ -92,13 +107,14 @@ class CameraManager(private val context: Context) {
 
     @OptIn(ExperimentalCamera2Interop::class)
     fun startCamera(lifecycleOwner: LifecycleOwner, cameraId: String, width: Int = 640, height: Int = 480) {
-        val provider = cameraProvider ?: return
         lastLifecycleOwner = lifecycleOwner
+        activeCameraId = cameraId
+        activeResolution = Resolution(width, height)
+
+        val provider = cameraProvider ?: return
         
         // Stop everything else first to avoid conflicts - ensures only ONE camera/res is active
         provider.unbindAll()
-        activeCameraId = cameraId
-        activeResolution = Resolution(width, height)
 
         val flowKey = "$cameraId:$width:$height"
         val flow = cameraFlows.getOrPut(flowKey) {
@@ -197,6 +213,7 @@ class CameraManager(private val context: Context) {
         return result.distinctBy { it.id }
     }
 
+    @Suppress("Unused")
     fun startSupportedCameras(lifecycleOwner: LifecycleOwner) {
         lastLifecycleOwner = lifecycleOwner
         getCameraInfos().firstOrNull { it.facing == "Back" && !it.id.contains(":") }?.let {
@@ -208,15 +225,24 @@ class CameraManager(private val context: Context) {
 
     private fun processImage(imageProxy: ImageProxy, flow: MutableSharedFlow<ByteArray>) {
         try {
-            val bitmap = try {
-                imageProxy.toBitmap()
-            } catch (_: Exception) {
-                imageProxyToBitmapManual(imageProxy)
+            if (flow.subscriptionCount.value == 0) {
+                return
             }
+            val yBuffer = imageProxy.planes[0].buffer
+            val uBuffer = imageProxy.planes[1].buffer
+            val vBuffer = imageProxy.planes[2].buffer
+            val ySize = yBuffer.remaining()
+            val uSize = uBuffer.remaining()
+            val vSize = vBuffer.remaining()
+            val nv21 = ByteArray(ySize + uSize + vSize)
+            yBuffer.get(nv21, 0, ySize)
+            vBuffer.get(nv21, ySize, vSize)
+            uBuffer.get(nv21, ySize + vSize, uSize)
+
+            val yuvImage = YuvImage(nv21, ImageFormat.NV21, imageProxy.width, imageProxy.height, null)
             val out = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 60, out)
+            yuvImage.compressToJpeg(Rect(0, 0, imageProxy.width, imageProxy.height), 60, out)
             flow.tryEmit(out.toByteArray())
-            bitmap.recycle()
         } catch (e: Exception) {
             Log.e("CameraManager", "Processing error", e)
         } finally {
@@ -224,24 +250,7 @@ class CameraManager(private val context: Context) {
         }
     }
 
-    private fun imageProxyToBitmapManual(image: ImageProxy): Bitmap {
-        val yBuffer = image.planes[0].buffer
-        val uBuffer = image.planes[1].buffer
-        val vBuffer = image.planes[2].buffer
-        val ySize = yBuffer.remaining()
-        val uSize = uBuffer.remaining()
-        val vSize = vBuffer.remaining()
-        val nv21 = ByteArray(ySize + uSize + vSize)
-        yBuffer.get(nv21, 0, ySize)
-        vBuffer.get(nv21, ySize, vSize)
-        uBuffer.get(nv21, ySize + vSize, uSize)
-        val yuvImage = YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
-        val out = ByteArrayOutputStream()
-        yuvImage.compressToJpeg(Rect(0, 0, image.width, image.height), 100, out)
-        val imageBytes = out.toByteArray()
-        return android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-            .copy(Bitmap.Config.ARGB_8888, true)
-    }
+
 
     fun stopStreaming() {
         cameraProvider?.unbindAll()

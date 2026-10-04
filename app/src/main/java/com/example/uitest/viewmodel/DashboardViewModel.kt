@@ -33,6 +33,24 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     var keepScreenOn by mutableStateOf(prefs.getBoolean("keep_screen_on", true))
         private set
 
+    var isModulesActive by mutableStateOf(value = false)
+        private set
+
+    var sensorDelayFastest by mutableStateOf(value = false)
+        private set
+
+    fun toggleModulesActive() {
+        isModulesActive = !isModulesActive
+    }
+
+    fun updateSensorDelayMode(fastest: Boolean) {
+        sensorDelayFastest = fastest
+        sensorManager.setSensorDelayMode(
+            if (fastest) android.hardware.SensorManager.SENSOR_DELAY_FASTEST
+            else android.hardware.SensorManager.SENSOR_DELAY_UI,
+        )
+    }
+
     var statePresets by mutableStateOf<List<SnapshotStateList<ModuleConfig>>>(emptyList())
         private set
 
@@ -126,7 +144,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 aspRatio = 1f,
             ),
         )
-        statePresets = statePresets + listOf(newPreset)
+        statePresets += listOf(newPreset)
         saveLayout()
     }
 

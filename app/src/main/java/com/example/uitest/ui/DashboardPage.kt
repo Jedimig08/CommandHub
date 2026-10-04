@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -28,10 +29,12 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -69,10 +72,10 @@ fun DashboardPage(
 ) {
     val context = LocalContext.current
     var selectedModule: ModuleConfig? by remember { mutableStateOf(null) }
-    var showSettingsSheet by remember { mutableStateOf(false) }
+    var showSettingsSheet by remember { mutableStateOf(value = false) }
 
     val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.GetContent(),
     ) { uri ->
         uri?.let {
             viewModel.importLayout(it)
@@ -84,32 +87,56 @@ fun DashboardPage(
         modifier = Modifier.fillMaxSize(),
         horizontalArrangement = Arrangement.run { spacedBy(8.dp) },
         verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(8.dp)
+        contentPadding = PaddingValues(8.dp),
     ) {
         item(span = { GridItemSpan(viewModel.columns) }) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Layout Page ${pageIndex + 1} / $totalPages",
+                        text = "Page ${pageIndex + 1} / $totalPages",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
                     )
 
-                    Button(
-                        onClick = { showSettingsSheet = true }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text("⚙ Settings")
+                        OutlinedButton(
+                            onClick = { viewModel.toggleModulesActive() },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (viewModel.isModulesActive)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else
+                                    MaterialTheme.colorScheme.surface,
+                            ),
+                        ) {
+                            Text(
+                                text = if (viewModel.isModulesActive) "⚡ Active" else "⏸ Paused",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { showSettingsSheet = true },
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Text("⚙", fontSize = 20.sp)
+                        }
                     }
                 }
             }
@@ -120,7 +147,7 @@ fun DashboardPage(
             key = { it.id },
             span = { module ->
                 GridItemSpan(module.spanX)
-            }
+            },
         ) { module ->
 
             ModuleView(
@@ -139,7 +166,7 @@ fun DashboardPage(
         ModalBottomSheet(
             onDismissRequest = { showSettingsSheet = false },
             sheetState = settingsSheetState,
-            modifier = Modifier.imePadding()
+            modifier = Modifier.imePadding(),
         ) {
             Column(
                 modifier = Modifier
@@ -184,6 +211,33 @@ fun DashboardPage(
                             Switch(
                                 checked = viewModel.keepScreenOn,
                                 onCheckedChange = { viewModel.setKeepScreenOnEnabled(it) }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "High-Speed Sensors",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = if (viewModel.sensorDelayFastest) "FASTEST mode (Higher CPU/Battery)" else "UI mode (Power Saver)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = viewModel.sensorDelayFastest,
+                                onCheckedChange = { viewModel.updateSensorDelayMode(it) }
                             )
                         }
 
@@ -452,7 +506,7 @@ fun DashboardPage(
                         }
                     }
 
-                    if (selectedCamera != null && (selectedCamera.supportedResolutions.isNotEmpty())) {
+                    if ((selectedCamera != null) && selectedCamera.supportedResolutions.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("Select Resolution:", style = MaterialTheme.typography.labelSmall)
                         Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
@@ -495,7 +549,7 @@ fun DashboardPage(
 
                                 val targetIndex = moveToIndex.toIntOrNull()
 
-                                if (targetIndex != null && targetIndex in 0..modules.lastIndex) {
+                                if ((targetIndex != null) && (targetIndex in modules.indices)) {
                                     moveModule(modules, currentIndex, targetIndex)
                                 }
                             }
@@ -555,45 +609,83 @@ fun ModuleView(
     ) {
         when {
             module.type.startsWith("CAMERA") -> {
-                val parts = module.type.split(":")
-                val cameraId = parts.getOrNull(1) ?: "0"
-                val res = parts.getOrNull(2)?.split("x")
-                val width = res?.getOrNull(0)?.toIntOrNull() ?: 640
-                val height = res?.getOrNull(1)?.toIntOrNull() ?: 480
-                
-                val frame by viewModel.cameraManager.getFlow(cameraId, width, height).collectAsState(null)
-                
-                frame?.let { bytes ->
-                    val bitmap = remember(bytes) { 
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size) 
-                    }
-                    bitmap?.let {
-                        Image(
-                            bitmap = it.asImageBitmap(),
-                            contentDescription = "Camera $cameraId",
-                            modifier = Modifier.fillMaxSize()
+                if (!viewModel.isModulesActive) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(8.dp)
+                    ) {
+                        Text(
+                            text = "Camera Paused",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 11.sp
                         )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedButton(
+                            onClick = { viewModel.toggleModulesActive() }
+                        ) {
+                            Text("Activate", fontSize = 10.sp, color = Color.White)
+                        }
                     }
-                } ?: Text("Camera $cameraId Loading...", color = Color.Gray, fontSize = 12.sp)
+                } else {
+                    val parts = module.type.split(":")
+                    val cameraId = parts.getOrNull(1) ?: "0"
+                    val res = parts.getOrNull(2)?.split("x")
+                    val width = res?.getOrNull(0)?.toIntOrNull() ?: 640
+                    val height = res?.getOrNull(1)?.toIntOrNull() ?: 480
+                    
+                    val frame by viewModel.cameraManager.getFlow(cameraId, width, height).collectAsState(null)
+                    
+                    frame?.let { bytes ->
+                        val bitmap = remember(bytes) { 
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size) 
+                        }
+                        bitmap?.let {
+                            Image(
+                                bitmap = it.asImageBitmap(),
+                                contentDescription = "Camera $cameraId",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    } ?: Text("Camera $cameraId Loading...", color = Color.Gray, fontSize = 12.sp)
+                }
             }
             
             module.type.startsWith("SENSOR") -> {
-                val sensorType = module.type.split(":").getOrNull(1)?.toIntOrNull() ?: 1
-                val data by viewModel.sensorManager.getSensorFlow(sensorType).collectAsState(null)
-                
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "Sensor $sensorType",
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = data?.values?.joinToString("\n") { "%.2f".format(it) } ?: "Waiting...",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Black
-                    )
+                if (!viewModel.isModulesActive) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(8.dp)
+                    ) {
+                        Text(
+                            text = "Sensor Paused",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 11.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedButton(
+                            onClick = { viewModel.toggleModulesActive() }
+                        ) {
+                            Text("Activate", fontSize = 10.sp, color = Color.White)
+                        }
+                    }
+                } else {
+                    val sensorType = module.type.split(":").getOrNull(1)?.toIntOrNull() ?: 1
+                    val data by viewModel.sensorManager.getSensorFlow(sensorType).collectAsState(null)
+                    
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Sensor $sensorType",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = data?.values?.joinToString("\n") { "%.2f".format(it) } ?: "Waiting...",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
                 }
             }
 

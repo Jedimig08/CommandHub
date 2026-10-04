@@ -31,13 +31,26 @@ class SensorManager(context: Context) {
     private val sensorFlows = mutableMapOf<Int, MutableSharedFlow<SensorData>>()
     private val listeners = mutableMapOf<Int, SensorEventListener>()
 
+    var currentDelayMode: Int = AndroidSensorManager.SENSOR_DELAY_UI
+        private set
+
+    fun setSensorDelayMode(delayMode: Int) {
+        if (currentDelayMode == delayMode) return
+        currentDelayMode = delayMode
+        val activeTypes = listeners.keys.toList()
+        activeTypes.forEach { type ->
+            stopSensor(type)
+            registerSensorListener(type)
+        }
+    }
+
     fun getAvailableSensors(): List<SensorInfo> {
         return sensorManager.getSensorList(Sensor.TYPE_ALL).map {
             SensorInfo(it.type, it.name, it.vendor, it.type, it.stringType)
         }
     }
 
-    fun getSensorFlow(sensorType: Int): SharedFlow<SensorData> {
+    private fun registerSensorListener(sensorType: Int): MutableSharedFlow<SensorData> {
         val flow = sensorFlows.getOrPut(sensorType) {
             MutableSharedFlow(replay = 1, extraBufferCapacity = 10, onBufferOverflow = BufferOverflow.DROP_OLDEST)
         }
@@ -47,6 +60,7 @@ class SensorManager(context: Context) {
             if (sensor != null) {
                 val listener = object : SensorEventListener {
                     override fun onSensorChanged(event: SensorEvent?) {
+                        if (flow.subscriptionCount.value == 0) return
                         event?.let {
                             val data = SensorData(
                                 type = it.sensor.type,
@@ -58,11 +72,15 @@ class SensorManager(context: Context) {
                     }
                     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
                 }
-                sensorManager.registerListener(listener, sensor, AndroidSensorManager.SENSOR_DELAY_FASTEST)
+                sensorManager.registerListener(listener, sensor, currentDelayMode)
                 listeners[sensorType] = listener
             }
         }
         return flow
+    }
+
+    fun getSensorFlow(sensorType: Int): SharedFlow<SensorData> {
+        return registerSensorListener(sensorType)
     }
 
     fun stopSensor(sensorType: Int) {
