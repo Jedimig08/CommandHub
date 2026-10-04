@@ -5,6 +5,7 @@ import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
 import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CaptureRequest
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.camera.camera2.interop.Camera2CameraInfo
@@ -28,10 +29,11 @@ import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import android.os.Build
+import android.util.Range
+import android.util.Size
+import androidx.camera.camera2.interop.Camera2Interop
 
 import kotlinx.serialization.Serializable
-
-
 
 @Serializable
 data class Resolution(val width: Int, val height: Int) {
@@ -57,6 +59,8 @@ class CameraManager(private val context: Context) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var activeCameraId: String? = null
     private var activeResolution: Resolution? = null
+    private var activeFps: Int = 30
+    private var lastFrameTimeMs: Long = 0L
 
     init {
         val future = ProcessCameraProvider.getInstance(context)
@@ -66,7 +70,7 @@ class CameraManager(private val context: Context) {
                 lastLifecycleOwner?.let { owner ->
                     activeCameraId?.let { id ->
                         val res = activeResolution ?: Resolution(640, 480)
-                        startCamera(owner, id, res.width, res.height)
+                        startCamera(owner, id, res.width, res.height, activeFps)
                     }
                 }
             },
@@ -78,14 +82,14 @@ class CameraManager(private val context: Context) {
         lastLifecycleOwner = lifecycleOwner
         activeCameraId?.let { id ->
             val res = activeResolution ?: Resolution(640, 480)
-            startCamera(lifecycleOwner, id, res.width, res.height)
+            startCamera(lifecycleOwner, id, res.width, res.height, activeFps)
         }
     }
 
     fun isReady(): Boolean = cameraProvider != null
 
-    fun getFlow(cameraId: String, width: Int = 640, height: Int = 480): SharedFlow<ByteArray> {
-        val flowKey = "$cameraId:$width:$height"
+    fun getFlow(cameraId: String, width: Int = 640, height: Int = 480, fps: Int = 30): SharedFlow<ByteArray> {
+        val flowKey = "$cameraId:$width:$height:$fps"
         val flow = cameraFlows.getOrPut(flowKey) {
             MutableSharedFlow(
                 replay = 0,
@@ -96,8 +100,8 @@ class CameraManager(private val context: Context) {
         
         mainHandler.post {
             lastLifecycleOwner?.let { owner ->
-                if ((activeCameraId != cameraId) || (activeResolution?.width != width) || (activeResolution?.height != height)) {
-                    startCamera(owner, cameraId, width, height)
+                if ((activeCameraId != cameraId) || (activeResolution?.width != width) || (activeResolution?.height != height) || (activeFps != fps)) {
+                    startCamera(owner, cameraId, width, height, fps)
                 }
             }
         }
@@ -106,17 +110,19 @@ class CameraManager(private val context: Context) {
     }
 
     @OptIn(ExperimentalCamera2Interop::class)
-    fun startCamera(lifecycleOwner: LifecycleOwner, cameraId: String, width: Int = 640, height: Int = 480) {
+    fun startCamera(lifecycleOwner: LifecycleOwner, cameraId: String, width: Int = 640, height: Int = 480, fps: Int = 30) {
         lastLifecycleOwner = lifecycleOwner
         activeCameraId = cameraId
         activeResolution = Resolution(width, height)
+        activeFps = fps
+        lastFrameTimeMs = 0L
 
         val provider = cameraProvider ?: return
         
-        // Stop everything else first to avoid conflicts - ensures only ONE camera/res is active
+        // Stop everything else first to avoid conflicts - ensures only ONE camera/res/fps is active
         provider.unbindAll()
 
-        val flowKey = "$cameraId:$width:$height"
+        val flowKey = "$cameraId:$width:$height:$fps"
         val flow = cameraFlows.getOrPut(flowKey) {
             MutableSharedFlow(replay = 0, extraBufferCapacity = 5, onBufferOverflow = BufferOverflow.DROP_OLDEST)
         }
@@ -129,18 +135,26 @@ class CameraManager(private val context: Context) {
             .setResolutionSelector(
                 ResolutionSelector.Builder()
                     .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
-                    .setResolutionStrategy(ResolutionStrategy(android.util.Size(width, height), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER))
+                    .setResolutionStrategy(ResolutionStrategy(Size(width, height), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER))
                     .build()
             )
 
+        val extender = Camera2Interop.Extender(builder)
         if (parts.size == 2 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            androidx.camera.camera2.interop.Camera2Interop.Extender(builder)
-                .setPhysicalCameraId(parts[1])
+            extender.setPhysicalCameraId(parts[1])
+        }
+        try {
+            extender.setCaptureRequestOption(
+                CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+                Range(fps, fps)
+            )
+        } catch (e: Exception) {
+            Log.w("CameraManager", "Could not set AE target FPS range", e)
         }
 
         val analysis = builder.build()
         analysis.setAnalyzer(cameraExecutor) { image ->
-            processImage(image, flow)
+            processImage(image, flow, fps)
         }
 
         val selector = CameraSelector.Builder()
@@ -151,7 +165,7 @@ class CameraManager(private val context: Context) {
 
         try {
             provider.bindToLifecycle(lifecycleOwner, selector, analysis)
-            Log.d("CameraManager", "Bound camera $cameraId at ${width}x$height")
+            Log.d("CameraManager", "Bound camera $cameraId at ${width}x$height @ ${fps}FPS")
         } catch (e: Exception) {
             Log.e("CameraManager", "Failed to bind camera $cameraId", e)
         }
@@ -223,11 +237,18 @@ class CameraManager(private val context: Context) {
 
     fun getDeviceName(): String = "${Build.MANUFACTURER} ${Build.MODEL}"
 
-    private fun processImage(imageProxy: ImageProxy, flow: MutableSharedFlow<ByteArray>) {
+    private fun processImage(imageProxy: ImageProxy, flow: MutableSharedFlow<ByteArray>, targetFps: Int) {
         try {
             if (flow.subscriptionCount.value == 0) {
                 return
             }
+            val now = System.currentTimeMillis()
+            val minIntervalMs = if (targetFps > 0) 1000L / targetFps else 0L
+            if (minIntervalMs > 0 && (now - lastFrameTimeMs) < minIntervalMs) {
+                return
+            }
+            lastFrameTimeMs = now
+
             val yBuffer = imageProxy.planes[0].buffer
             val uBuffer = imageProxy.planes[1].buffer
             val vBuffer = imageProxy.planes[2].buffer
@@ -250,11 +271,10 @@ class CameraManager(private val context: Context) {
         }
     }
 
-
-
     fun stopStreaming() {
         cameraProvider?.unbindAll()
         activeCameraId = null
         activeResolution = null
+        activeFps = 30
     }
 }

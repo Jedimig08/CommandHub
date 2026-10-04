@@ -485,23 +485,28 @@ fun DashboardPage(
                 }
 
                 if (editedType.startsWith("CAMERA")) {
-                    val parts = editedType.split(":")
-                    val cameraId = parts.getOrNull(1) ?: "0"
+                    val config = remember(editedType) { parseCameraConfig(editedType) }
                     val cameras = remember { viewModel.cameraManager.getCameraInfos() }
-                    val selectedCamera = cameras.find { it.id == cameraId }
-                    
+                    val selectedCamera = cameras.find { it.id == config.cameraId }
+
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Select Camera:", style = MaterialTheme.typography.labelSmall)
                     Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
                         cameras.forEach { camera ->
+                            val isSelected = camera.id == config.cameraId
                             Button(
-                                onClick = { 
-                                    val resPart = parts.getOrNull(2) ?: "640x480"
-                                    editedType = "CAMERA:${camera.id}:$resPart" 
+                                onClick = {
+                                    editedType = "CAMERA:${camera.id}:${config.width}x${config.height}:${config.fps}"
                                 },
+                                colors = if (isSelected) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                         else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                 modifier = Modifier.padding(4.dp)
                             ) {
-                                Text("${camera.facing} ${camera.type}", fontSize = 10.sp)
+                                Text(
+                                    "${camera.facing} ${camera.type}",
+                                    fontSize = 10.sp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -511,12 +516,40 @@ fun DashboardPage(
                         Text("Select Resolution:", style = MaterialTheme.typography.labelSmall)
                         Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
                             selectedCamera.supportedResolutions.forEach { res ->
+                                val resStr = "${res.width}x${res.height}"
+                                val isSelected = res.width == config.width && res.height == config.height
                                 Button(
-                                    onClick = { editedType = "CAMERA:$cameraId:${res.width}x${res.height}" },
+                                    onClick = { editedType = "CAMERA:${config.cameraId}:$resStr:${config.fps}" },
+                                    colors = if (isSelected) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                             else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                     modifier = Modifier.padding(4.dp)
                                 ) {
-                                    Text("${res.width}x${res.height}", fontSize = 10.sp)
+                                    Text(
+                                        resStr,
+                                        fontSize = 10.sp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Select Frame Rate (FPS):", style = MaterialTheme.typography.labelSmall)
+                    Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                        listOf(5, 10, 15, 20, 25, 30, 60).forEach { fps ->
+                            val isSelected = fps == config.fps
+                            Button(
+                                onClick = { editedType = "CAMERA:${config.cameraId}:${config.width}x${config.height}:$fps" },
+                                colors = if (isSelected) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                         else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                modifier = Modifier.padding(4.dp)
+                            ) {
+                                Text(
+                                    "$fps FPS",
+                                    fontSize = 10.sp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -627,13 +660,14 @@ fun ModuleView(
                         }
                     }
                 } else {
-                    val parts = module.type.split(":")
-                    val cameraId = parts.getOrNull(1) ?: "0"
-                    val res = parts.getOrNull(2)?.split("x")
-                    val width = res?.getOrNull(0)?.toIntOrNull() ?: 640
-                    val height = res?.getOrNull(1)?.toIntOrNull() ?: 480
+                    val cameraConfig = remember(module.type) { parseCameraConfig(module.type) }
                     
-                    val frame by viewModel.cameraManager.getFlow(cameraId, width, height).collectAsState(null)
+                    val frame by viewModel.cameraManager.getFlow(
+                        cameraConfig.cameraId,
+                        cameraConfig.width,
+                        cameraConfig.height,
+                        cameraConfig.fps
+                    ).collectAsState(null)
                     
                     frame?.let { bytes ->
                         val bitmap = remember(bytes) { 
@@ -642,11 +676,11 @@ fun ModuleView(
                         bitmap?.let {
                             Image(
                                 bitmap = it.asImageBitmap(),
-                                contentDescription = "Camera $cameraId",
+                                contentDescription = "Camera ${cameraConfig.cameraId}",
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
-                    } ?: Text("Camera $cameraId Loading...", color = Color.Gray, fontSize = 12.sp)
+                    } ?: Text("Camera ${cameraConfig.cameraId} (${cameraConfig.fps} FPS) Loading...", color = Color.Gray, fontSize = 12.sp)
                 }
             }
             
@@ -710,4 +744,43 @@ fun ModuleView(
             }
         }
     }
+}
+
+data class ParsedCameraConfig(
+    val cameraId: String,
+    val width: Int,
+    val height: Int,
+    val fps: Int,
+)
+
+fun parseCameraConfig(type: String): ParsedCameraConfig {
+    if (!type.startsWith("CAMERA")) {
+        return ParsedCameraConfig("0", 640, 480, 30)
+    }
+    val raw = type.removePrefix("CAMERA:").removePrefix("CAMERA")
+    if (raw.isEmpty()) {
+        return ParsedCameraConfig("0", 640, 480, 30)
+    }
+    val tokens = raw.split(":")
+
+    var width = 640
+    var height = 480
+    var fps = 30
+
+    val resTokenIndex = tokens.indexOfFirst { it.contains("x") && it.split("x").all { part -> part.toIntOrNull() != null } }
+
+    val cameraId = if (resTokenIndex != -1) {
+        val resParts = tokens[resTokenIndex].split("x")
+        width = resParts.getOrNull(0)?.toIntOrNull() ?: 640
+        height = resParts.getOrNull(1)?.toIntOrNull() ?: 480
+
+        if (resTokenIndex + 1 < tokens.size) {
+            fps = tokens[resTokenIndex + 1].toIntOrNull() ?: 30
+        }
+        tokens.subList(0, resTokenIndex).joinToString(":")
+    } else {
+        tokens.joinToString(":")
+    }.ifEmpty { "0" }
+
+    return ParsedCameraConfig(cameraId, width, height, fps)
 }

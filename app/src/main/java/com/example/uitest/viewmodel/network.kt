@@ -607,16 +607,23 @@ class DashboardServer(
                 get("/camera/{id}") {
                     val cameraId = call.parameters["id"] ?: ""
                     val isMinimal = call.request.queryParameters["minimal"] == "true"
+                    val initialRes = call.request.queryParameters["res"] ?: "640x480"
+                    val initialFps = call.request.queryParameters["fps"]?.toIntOrNull() ?: 30
                     val cameras = cameraManager.getCameraInfos()
                     val currentCamera = cameras.find { it.id == cameraId }
-                    
+
                     val otherCamerasLinks = cameras.asSequence().filter { it.id != cameraId }.joinToString(" | ") {
-                        "<a href='/camera/${it.id}'>Camera ${it.id}</a>" 
+                        "<a href='/camera/${it.id}'>Camera ${it.id}</a>"
                     }
 
-                    val resOptions = currentCamera?.supportedResolutions?.joinToString("") { 
-                        "<button onclick=\"changeRes('${it.width}x${it.height}')\">${it.width}x${it.height}</button>" 
+                    val resOptions = currentCamera?.supportedResolutions?.joinToString("") {
+                        "<button onclick=\"changeRes('${it.width}x${it.height}')\">${it.width}x${it.height}</button>"
                     } ?: "No resolutions found"
+
+                    val fpsList = listOf(5, 10, 15, 20, 25, 30, 60)
+                    val fpsOptions = fpsList.joinToString("") { fps ->
+                        "<button onclick=\"changeFps($fps)\">$fps FPS</button>"
+                    }
 
                     val html = """
                         <html>
@@ -628,6 +635,7 @@ class DashboardServer(
                                 img { max-width: 100%; height: auto; border: 2px solid #333; margin-top: ${if (isMinimal) "0" else "10px"}; }
                                 .nav { padding: 10px; }
                                 .res-picker { padding: 10px; background: rgba(34,34,34,0.8); position: ${if (isMinimal) "fixed" else "static"}; top: 0; width: 100%; z-index: 100; }
+                                .picker-group { margin: 4px 0; }
                                 a { color: #007AFF; text-decoration: none; margin: 0 10px; }
                                 button { background: #444; color: white; border: 1px solid #666; padding: 5px 10px; margin: 2px; border-radius: 4px; cursor: pointer; }
                                 button:hover { background: #555; }
@@ -635,9 +643,21 @@ class DashboardServer(
                                 .min-toggle:hover { opacity: 1.0; }
                             </style>
                             <script>
-                                function changeRes(res) {
+                                const urlParams = new URLSearchParams(window.location.search);
+                                let currentRes = urlParams.get('res') || '$initialRes';
+                                let currentFps = urlParams.get('fps') || '$initialFps';
+
+                                function updateStream() {
                                     const img = document.getElementById('stream');
-                                    img.src = '/stream/$cameraId?res=' + res + '&t=' + Date.now();
+                                    img.src = '/stream/$cameraId?res=' + currentRes + '&fps=' + currentFps + '&t=' + Date.now();
+                                }
+                                function changeRes(res) {
+                                    currentRes = res;
+                                    updateStream();
+                                }
+                                function changeFps(fps) {
+                                    currentFps = fps;
+                                    updateStream();
                                 }
                                 function checkStream() {
                                     const img = document.getElementById('stream');
@@ -657,9 +677,14 @@ class DashboardServer(
                                 </div>
                             </div>
                             <div class="res-picker">
-                                <strong>${if (isMinimal) "" else "Resolutions:"}</strong> $resOptions
+                                <div class="picker-group">
+                                    <strong>Resolutions:</strong> $resOptions
+                                </div>
+                                <div class="picker-group">
+                                    <strong>Frame Rate (FPS):</strong> $fpsOptions
+                                </div>
                             </div>
-                            <img id="stream" src="/stream/$cameraId">
+                            <img id="stream" src="/stream/$cameraId?res=$initialRes&fps=$initialFps">
                             <div class="min-toggle">
                                 <a href="?minimal=${!isMinimal}" style="color:white; font-size:10px;">[Toggle UI]</a>
                             </div>
@@ -672,13 +697,14 @@ class DashboardServer(
                 get("/stream/{id}") {
                     val cameraId = call.parameters["id"] ?: return@get
                     val resParam = call.request.queryParameters["res"] ?: "640x480"
+                    val fpsParam = call.request.queryParameters["fps"]?.toIntOrNull() ?: 30
                     val parts = resParam.split("x")
                     val width = parts.getOrNull(0)?.toIntOrNull() ?: 640
                     val height = parts.getOrNull(1)?.toIntOrNull() ?: 480
-                    
+
                     val boundary = "frame"
                     call.respondBytesWriter(contentType = ContentType.parse("multipart/x-mixed-replace; boundary=$boundary")) {
-                        streamCamera(cameraManager.getFlow(cameraId, width, height), boundary)
+                        streamCamera(cameraManager.getFlow(cameraId, width, height, fpsParam), boundary)
                     }
                 }
 
