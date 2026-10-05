@@ -464,9 +464,25 @@ fun DashboardPage(
                 TextField(
                     value = editedType,
                     onValueChange = { editedType = it },
-                    label = { Text("Type (LOG, CAMERA:id, SENSOR:id)") },
+                    label = { Text("Type (LOG, HARDWARE, CAMERA:id, SENSOR:id)") },
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    Button(
+                        onClick = { editedType = "LOG" },
+                        modifier = Modifier.padding(4.dp)
+                    ) {
+                        Text("LOG", fontSize = 10.sp)
+                    }
+                    Button(
+                        onClick = { editedType = "HARDWARE" },
+                        modifier = Modifier.padding(4.dp)
+                    ) {
+                        Text("HARDWARE", fontSize = 10.sp)
+                    }
+                }
 
                 if (editedType.startsWith("SENSOR")) {
                     val sensors = remember { viewModel.sensorManager.getAvailableSensors() }
@@ -641,6 +657,24 @@ fun ModuleView(
         contentAlignment = Alignment.Center
     ) {
         when {
+            module.type.startsWith("HARDWARE") -> {
+                val telemetry by viewModel.hardwareManager.telemetryFlow.collectAsState()
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Text("⚡ Hardware & Power", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text("🔋 Battery: ${telemetry.batteryLevelPct}% (${telemetry.chargingSource})", color = Color.Green, fontSize = 10.sp)
+                    Text("🌡️ Temp: ${telemetry.batteryTempCelsius}°C | ${telemetry.thermalStatus}", color = Color.Yellow, fontSize = 10.sp)
+                    Text("⚡ Power: %.2f W (%.1f mA)".format(telemetry.powerWatts, telemetry.currentNowMa), color = Color.Cyan, fontSize = 10.sp)
+                    Text("🧠 CPU: %.1f%% | RAM: ${telemetry.ramUsedMb}MB".format(telemetry.cpuUsagePct), color = Color.White, fontSize = 10.sp)
+                }
+            }
+
             module.type.startsWith("CAMERA") -> {
                 if (!viewModel.isModulesActive) {
                     Column(

@@ -47,6 +47,7 @@ class DashboardServer(
     private val cameraManager: CameraManager,
     private val sensorManager: SensorManager,
     private val tcpManager: TcpManager,
+    private val hardwareManager: HardwareManager,
     private val onLogReceived: (String, String) -> Unit,
 ) {
 
@@ -804,6 +805,64 @@ class DashboardServer(
                     } else {
                         call.respond(cameraManager.getCameraInfos())
                     }
+                }
+
+                // Hardware Telemetry Web Page
+                register("/hardware", "Hardware Telemetry") {
+                    val html = """
+                        <html>
+                        <head>
+                            <title>Hardware Telemetry</title>
+                            <style>
+                                body { font-family: 'Courier New', monospace; background: #000; color: #0f0; padding: 40px; }
+                                .card { border: 1px solid #333; padding: 20px; margin-bottom: 10px; border-radius: 8px; background: #111; }
+                                .val { color: #fff; font-weight: bold; }
+                            </style>
+                            <script>
+                                async function fetchTelemetry() {
+                                    try {
+                                        const res = await fetch('/api/hardware');
+                                        const data = await res.json();
+                                        document.getElementById('level').innerText = data.batteryLevelPct + '%';
+                                        document.getElementById('temp').innerText = data.batteryTempCelsius + ' °C';
+                                        document.getElementById('voltage').innerText = data.batteryVoltageV + ' V';
+                                        document.getElementById('current').innerText = data.currentNowMa + ' mA';
+                                        document.getElementById('power').innerText = data.powerWatts.toFixed(3) + ' W';
+                                        document.getElementById('charging').innerText = data.chargingSource + (data.isCharging ? ' (Charging)' : '');
+                                        document.getElementById('thermal').innerText = data.thermalStatus;
+                                        document.getElementById('cpu').innerText = data.cpuUsagePct.toFixed(1) + ' %';
+                                        document.getElementById('ram').innerText = data.ramUsedMb + ' MB / ' + data.ramTotalMb + ' MB';
+                                    } catch (e) {
+                                        console.error(e);
+                                    }
+                                }
+                                setInterval(fetchTelemetry, 1000);
+                                window.onload = fetchTelemetry;
+                            </script>
+                        </head>
+                        <body>
+                            <h1>Device Hardware & Power Telemetry</h1>
+                            <div class="card">
+                                <p>🔋 Battery Level: <span id="level" class="val">Loading...</span></p>
+                                <p>🔌 Charging State: <span id="charging" class="val">Loading...</span></p>
+                                <p>🌡️ Battery Temperature: <span id="temp" class="val">Loading...</span></p>
+                                <p>⚡ Voltage: <span id="voltage" class="val">Loading...</span></p>
+                                <p>⚡ Current Draw: <span id="current" class="val">Loading...</span></p>
+                                <p>⚡ Power Consumption: <span id="power" class="val">Loading...</span></p>
+                                <p>🔥 Thermal Status: <span id="thermal" class="val">Loading...</span></p>
+                                <p>🧠 CPU Usage: <span id="cpu" class="val">Loading...</span></p>
+                                <p>💾 RAM Usage: <span id="ram" class="val">Loading...</span></p>
+                            </div>
+                            <br><a href="/" style="color: #007AFF; text-decoration: none;">&larr; Back to Hub</a>
+                        </body>
+                        </html>
+                    """.trimIndent()
+                    call.respondText(html, ContentType.Text.Html)
+                }
+
+                // JSON API for Hardware Telemetry
+                get("/api/hardware") {
+                    call.respond(hardwareManager.telemetryFlow.value)
                 }
 
                 get("/") {

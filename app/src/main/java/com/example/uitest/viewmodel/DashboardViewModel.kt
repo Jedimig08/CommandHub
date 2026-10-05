@@ -26,6 +26,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     val cameraManager = CameraManager(application)
     val sensorManager = SensorManager(application)
     val tcpManager = TcpManager()
+    val hardwareManager = HardwareManager(application)
 
     private val repo = LayoutRepository(application)
     private val prefs = application.getSharedPreferences("dashboard_prefs", Context.MODE_PRIVATE)
@@ -82,6 +83,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         cameraManager = cameraManager,
         sensorManager = sensorManager,
         tcpManager = tcpManager,
+        hardwareManager = hardwareManager,
     ) { id, text ->
         updateLogById(id.toIntOrNull() ?: -1, text)
     }
@@ -102,6 +104,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         sensorManager.stopAll()
         cameraManager.stopStreaming()
         tcpManager.disconnect()
+        hardwareManager.stop()
     }
 
     fun updateLogById(id: Int, newText: String) {
