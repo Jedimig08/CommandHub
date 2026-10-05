@@ -32,6 +32,7 @@ import android.os.Build
 import android.util.Range
 import android.util.Size
 import androidx.camera.camera2.interop.Camera2Interop
+import androidx.camera.core.Camera
 
 import kotlinx.serialization.Serializable
 
@@ -61,6 +62,33 @@ class CameraManager(private val context: Context) {
     private var activeResolution: Resolution? = null
     private var activeFps: Int = 30
     private var lastFrameTimeMs: Long = 0L
+    private var boundCamera: Camera? = null
+    private var isFlashlightOn = false
+
+    fun setFlashlight(enabled: Boolean) {
+        isFlashlightOn = enabled
+        try {
+            boundCamera?.cameraControl?.enableTorch(enabled)
+        } catch (e: Exception) {
+            Log.w("CameraManager", "Could not set torch via CameraX", e)
+        }
+        try {
+            val manager = context.getSystemService(Context.CAMERA_SERVICE) as Camera2Manager
+            val backCameraId = manager.cameraIdList.firstOrNull { id ->
+                val c = manager.getCameraCharacteristics(id)
+                c[CameraCharacteristics.FLASH_INFO_AVAILABLE] == true &&
+                c[CameraCharacteristics.LENS_FACING] == CameraCharacteristics.LENS_FACING_BACK
+            } ?: manager.cameraIdList.firstOrNull()
+
+            backCameraId?.let { id ->
+                manager.setTorchMode(id, enabled)
+            }
+        } catch (e: Exception) {
+            Log.w("CameraManager", "Could not set torch via setTorchMode", e)
+        }
+    }
+
+    fun isFlashlightOn(): Boolean = isFlashlightOn
 
     init {
         val future = ProcessCameraProvider.getInstance(context)
@@ -164,7 +192,10 @@ class CameraManager(private val context: Context) {
             .build()
 
         try {
-            provider.bindToLifecycle(lifecycleOwner, selector, analysis)
+            boundCamera = provider.bindToLifecycle(lifecycleOwner, selector, analysis)
+            if (isFlashlightOn) {
+                try { boundCamera?.cameraControl?.enableTorch(true) } catch (_: Exception) {}
+            }
             Log.d("CameraManager", "Bound camera $cameraId at ${width}x$height @ ${fps}FPS")
         } catch (e: Exception) {
             Log.e("CameraManager", "Failed to bind camera $cameraId", e)

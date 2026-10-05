@@ -34,6 +34,14 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     var keepScreenOn by mutableStateOf(prefs.getBoolean("keep_screen_on", true))
         private set
 
+    var isFlashlightOn by mutableStateOf(false)
+        private set
+
+    fun toggleFlashlight(enabled: Boolean) {
+        isFlashlightOn = enabled
+        cameraManager.setFlashlight(enabled)
+    }
+
     var isModulesActive by mutableStateOf(value = false)
         private set
 

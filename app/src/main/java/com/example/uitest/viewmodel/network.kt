@@ -660,6 +660,22 @@ class DashboardServer(
                                     currentFps = fps;
                                     updateStream();
                                 }
+                                async function toggleFlashlight() {
+                                    try {
+                                        const res = await fetch('/api/flashlight/toggle', { method: 'POST' });
+                                        const data = await res.json();
+                                        const btn = document.getElementById('flashBtn');
+                                        if (btn) btn.style.background = data.enabled ? '#34C759' : '#FF9500';
+                                    } catch (e) {}
+                                }
+                                async function checkFlashlight() {
+                                    try {
+                                        const res = await fetch('/api/flashlight');
+                                        const data = await res.json();
+                                        const btn = document.getElementById('flashBtn');
+                                        if (btn) btn.style.background = data.enabled ? '#34C759' : '#FF9500';
+                                    } catch (e) {}
+                                }
                                 function checkStream() {
                                     const img = document.getElementById('stream');
                                     setTimeout(() => {
@@ -670,7 +686,7 @@ class DashboardServer(
                                 }
                             </script>
                         </head>
-                        <body onload="checkStream()">
+                        <body onload="checkStream(); checkFlashlight();">
                             <div class="header">
                                 <h1>Camera $cameraId Stream</h1>
                                 <div class="nav">
@@ -683,6 +699,9 @@ class DashboardServer(
                                 </div>
                                 <div class="picker-group">
                                     <strong>Frame Rate (FPS):</strong> $fpsOptions
+                                </div>
+                                <div class="picker-group">
+                                    <strong>Flashlight:</strong> <button id="flashBtn" onclick="toggleFlashlight()" style="background:#FF9500;">Toggle Flashlight</button>
                                 </div>
                             </div>
                             <img id="stream" src="/stream/$cameraId?res=$initialRes&fps=$initialFps">
@@ -863,6 +882,24 @@ class DashboardServer(
                 // JSON API for Hardware Telemetry
                 get("/api/hardware") {
                     call.respond(hardwareManager.telemetryFlow.value)
+                }
+
+                // Flashlight API
+                get("/api/flashlight") {
+                    call.respond(mapOf("enabled" to cameraManager.isFlashlightOn()))
+                }
+
+                post("/api/flashlight") {
+                    val text = call.receiveText()
+                    val enable = text.contains("true") || call.request.queryParameters["enabled"] == "true"
+                    cameraManager.setFlashlight(enable)
+                    call.respond(mapOf("enabled" to cameraManager.isFlashlightOn()))
+                }
+
+                post("/api/flashlight/toggle") {
+                    val newState = !cameraManager.isFlashlightOn()
+                    cameraManager.setFlashlight(newState)
+                    call.respond(mapOf("enabled" to newState))
                 }
 
                 get("/") {
