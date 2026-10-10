@@ -78,10 +78,11 @@ class DashboardServer(
 
                 #console {
                     border: 1px solid #333;
-                    height: 400px;
+                    height: 350px;
                     overflow-y: scroll;
                     padding: 10px;
                     margin-bottom: 10px;
+                    background: #050505;
                 }
 
                 .line {
@@ -96,19 +97,24 @@ class DashboardServer(
                 }
 
                 input {
-                    width: 70%;
                     background: #111;
                     color: #fff;
                     border: 1px solid #444;
                     padding: 10px;
+                    border-radius: 4px;
                 }
 
                 button {
-                    padding: 10px;
+                    padding: 10px 15px;
                     background: #007AFF;
                     color: #fff;
                     border: none;
+                    border-radius: 4px;
                     cursor: pointer;
+                }
+
+                button:hover {
+                    opacity: 0.9;
                 }
 
                 select {
@@ -116,6 +122,69 @@ class DashboardServer(
                     background: #111;
                     color: #fff;
                     border: 1px solid #444;
+                    border-radius: 4px;
+                }
+
+                .macro-section {
+                    margin: 15px 0;
+                    background: #111;
+                    border: 1px solid #333;
+                    padding: 12px;
+                    border-radius: 6px;
+                }
+
+                .macro-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 10px;
+                }
+
+                .macro-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                    gap: 8px;
+                }
+
+                .macro-btn {
+                    background: #222;
+                    color: #0f0;
+                    border: 1px solid #0f0;
+                    padding: 8px 10px;
+                    border-radius: 4px;
+                    font-family: monospace;
+                    cursor: pointer;
+                    text-align: center;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    font-weight: bold;
+                }
+
+                .macro-btn:hover {
+                    background: #0f0;
+                    color: #000;
+                }
+
+                .macro-editor {
+                    display: none;
+                    background: #181818;
+                    padding: 12px;
+                    border: 1px dashed #444;
+                    margin-top: 10px;
+                    border-radius: 4px;
+                }
+
+                .macro-edit-row {
+                    display: flex;
+                    gap: 8px;
+                    margin-bottom: 6px;
+                }
+
+                .macro-edit-row input {
+                    flex: 1;
+                    padding: 6px;
+                    font-size: 0.9em;
                 }
             </style>
 
@@ -123,6 +192,17 @@ class DashboardServer(
 
                 let ws;
                 let lastActivity = Date.now();
+
+                const DEFAULT_MACROS = [
+                    { label: "M1: START", cmd: "START" },
+                    { label: "M2: STOP", cmd: "STOP" },
+                    { label: "M3: STATUS", cmd: "STATUS" },
+                    { label: "M4: LED ON", cmd: "LED_ON" },
+                    { label: "M5: LED OFF", cmd: "LED_OFF" },
+                    { label: "M6: RESET", cmd: "RESET" }
+                ];
+
+                let macros = JSON.parse(localStorage.getItem('terminal_macros') || JSON.stringify(DEFAULT_MACROS));
 
                 function getTime() {
                     const d = new Date();
@@ -197,33 +277,33 @@ class DashboardServer(
                     }, 2000);
                 }
 
-                function send() {
+                function escapeHtml(str) {
+                    if (!str) return '';
+                    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+                }
 
-                    const input =
-                        document.getElementById('input');
+                function formatCommand(cmd) {
+                    if (!cmd) return '';
+                    return cmd
+                        .replace(/\\n/g, '\n')
+                        .replace(/\\r/g, '\r')
+                        .replace(/\\t/g, '\t');
+                }
 
-                    const val =
-                        input.value.trim();
-
-                    if(!val)
-                        return;
-
+                function sendCustom(rawVal) {
+                    if(!rawVal) return;
+                    const val = formatCommand(rawVal);
                     lastActivity = Date.now();
 
-                    appendLog(
-                        '<span style="color:#007AFF;">TX:</span> ' +
-                        val
-                    );
+                    const displayLog = escapeHtml(val).replace(/\n/g, "<br>");
+                    appendLog('<span style="color:#007AFF;">TX:</span> ' + displayLog);
 
                     if(
                         ws &&
                         ws.readyState === WebSocket.OPEN
                     ) {
-
                         ws.send(val);
-
                     } else {
-
                         fetch(
                             '$sendEndpoint',
                             {
@@ -232,11 +312,71 @@ class DashboardServer(
                             }
                         );
                     }
+                }
 
+                function send() {
+
+                    const input =
+                        document.getElementById('input');
+
+                    const val =
+                        input.value;
+
+                    if(!val)
+                        return;
+
+                    sendCustom(val);
                     input.value = '';
                 }
 
-                window.onload = connectWs;
+                function renderMacros() {
+                    const grid = document.getElementById('macroGrid');
+                    const editorList = document.getElementById('macroEditorList');
+                    if(!grid || !editorList) return;
+
+                    grid.innerHTML = '';
+                    editorList.innerHTML = '';
+
+                    macros.forEach((m, idx) => {
+                        const btn = document.createElement('button');
+                        btn.className = 'macro-btn';
+                        btn.innerText = m.label || ('M' + (idx + 1));
+                        btn.onclick = () => sendCustom(m.cmd);
+                        grid.appendChild(btn);
+
+                        const row = document.createElement('div');
+                        row.className = 'macro-edit-row';
+                        row.style.alignItems = 'center';
+                        row.innerHTML =
+                            '<input type="text" value="' + escapeHtml(m.label || '') + '" placeholder="Label" style="width:25%; font-weight:bold;" onchange="updateMacro(' + idx + ', \'label\', this.value)">' +
+                            '<textarea placeholder="Command / Multi-line payload (supports \\n)" style="flex:1; height:42px; background:#111; color:#0f0; border:1px solid #444; font-family:monospace; padding:6px; border-radius:4px; resize:vertical;" onchange="updateMacro(' + idx + ', \'cmd\', this.value)">' + escapeHtml(m.cmd || '') + '</textarea>';
+                        editorList.appendChild(row);
+                    });
+                }
+
+                function updateMacro(idx, field, val) {
+                    macros[idx][field] = val;
+                    localStorage.setItem('terminal_macros', JSON.stringify(macros));
+                    renderMacros();
+                }
+
+                function toggleMacroEditor() {
+                    const ed = document.getElementById('macroEditor');
+                    if (ed) {
+                        ed.style.display = (ed.style.display === 'block') ? 'none' : 'block';
+                    }
+                }
+
+                function addMacroSlot() {
+                    macros.push({ label: 'M' + (macros.length + 1), cmd: '' });
+                    localStorage.setItem('terminal_macros', JSON.stringify(macros));
+                    renderMacros();
+                }
+
+                window.onload = () => {
+                    connectWs();
+                    renderMacros();
+                };
 
             </script>
         </head>
@@ -247,17 +387,36 @@ class DashboardServer(
 
             $extraControls
 
+            <div class="macro-section">
+                <div class="macro-header">
+                    <span style="color:#aaa; font-weight:bold; font-size:0.9em;">⚡ Quick Action Buttons</span>
+                    <button onclick="toggleMacroEditor()" style="background:#333; padding:5px 10px; font-size:0.8em;">⚙️ Configure Buttons</button>
+                </div>
+                <div id="macroGrid" class="macro-grid"></div>
+
+                <div id="macroEditor" class="macro-editor">
+                    <div style="margin-bottom:8px; color:#fff; font-size:0.9em; font-weight:bold;">
+                        Edit Macro Buttons (Label & Command):
+                    </div>
+                    <div id="macroEditorList"></div>
+                    <button onclick="addMacroSlot()" style="background:#28a745; margin-top:8px; padding:5px 10px; font-size:0.8em;">+ Add Button</button>
+                </div>
+            </div>
+
             <div id="console"></div>
 
-            <input
-                type="text"
-                id="input"
-                placeholder="Enter command..."
-                onkeydown="if(event.key==='Enter') send()">
+            <div style="display:flex; gap:10px;">
+                <input
+                    type="text"
+                    id="input"
+                    placeholder="Enter command..."
+                    style="flex:1;"
+                    onkeydown="if(event.key==='Enter') send()">
 
-            <button onclick="send()">
-                Send
-            </button>
+                <button onclick="send()">
+                    Send
+                </button>
+            </div>
 
         </body>
         </html>
@@ -642,11 +801,27 @@ class DashboardServer(
                                 button:hover { background: #555; }
                                 .min-toggle { position: fixed; bottom: 10px; right: 10px; opacity: 0.3; }
                                 .min-toggle:hover { opacity: 1.0; }
+                                .header, .res-picker { transition: opacity 0.5s ease-in-out; }
+                                .header:hover, .res-picker:hover { opacity: 1 !important; }
                             </style>
                             <script>
                                 const urlParams = new URLSearchParams(window.location.search);
                                 let currentRes = urlParams.get('res') || '$initialRes';
                                 let currentFps = urlParams.get('fps') || '$initialFps';
+                                let idleTimer;
+
+                                function resetIdleTimer() {
+                                    const header = document.querySelector('.header');
+                                    const picker = document.querySelector('.res-picker');
+                                    if (header) header.style.opacity = '1';
+                                    if (picker) picker.style.opacity = '1';
+
+                                    clearTimeout(idleTimer);
+                                    idleTimer = setTimeout(() => {
+                                        if (header) header.style.opacity = '0';
+                                        if (picker) picker.style.opacity = '0';
+                                    }, 3000);
+                                }
 
                                 function updateStream() {
                                     const img = document.getElementById('stream');
@@ -684,9 +859,17 @@ class DashboardServer(
                                         }
                                     }, 3000);
                                 }
+                                window.onload = () => {
+                                    checkStream();
+                                    checkFlashlight();
+                                    resetIdleTimer();
+                                    document.addEventListener('mousemove', resetIdleTimer);
+                                    document.addEventListener('touchstart', resetIdleTimer);
+                                    document.addEventListener('click', resetIdleTimer);
+                                };
                             </script>
                         </head>
-                        <body onload="checkStream(); checkFlashlight();">
+                        <body>
                             <div class="header">
                                 <h1>Camera $cameraId Stream</h1>
                                 <div class="nav">
