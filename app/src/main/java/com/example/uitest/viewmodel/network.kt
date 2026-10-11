@@ -33,7 +33,7 @@ import io.ktor.websocket.readText
 import io.ktor.websocket.send
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.consumeEach
-import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import java.util.Collections
 import kotlin.time.Duration.Companion.seconds
@@ -1114,7 +1114,7 @@ class DashboardServer(
         registerService(port)
     }
 
-    private suspend fun ByteWriteChannel.streamCamera(flow: SharedFlow<ByteArray>, boundary: String) {
+    private suspend fun ByteWriteChannel.streamCamera(flow: Flow<ByteArray>, boundary: String) {
         try {
             flow.collect { jpegBytes ->
                 writeStringUtf8("--$boundary\r\n")

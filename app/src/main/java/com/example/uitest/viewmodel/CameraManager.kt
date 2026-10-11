@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import android.hardware.camera2.CameraManager as Camera2Manager
 import android.os.Handler
 import android.os.Looper
@@ -55,6 +56,8 @@ class CameraManager(private val context: Context) {
 
     private var cameraProvider: ProcessCameraProvider? = null
     private val cameraExecutor = Executors.newSingleThreadExecutor()
+    private val encodeExecutor = Executors.newSingleThreadExecutor()
+    private val encoding = AtomicBoolean(false)
     private val cameraFlows = mutableMapOf<String, MutableSharedFlow<ByteArray>>()
     private var lastLifecycleOwner: LifecycleOwner? = null
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -121,7 +124,7 @@ class CameraManager(private val context: Context) {
         val flow = cameraFlows.getOrPut(flowKey) {
             MutableSharedFlow(
                 replay = 0,
-                extraBufferCapacity = 5,
+                extraBufferCapacity = 1,
                 onBufferOverflow = BufferOverflow.DROP_OLDEST,
             )
         }
@@ -139,6 +142,10 @@ class CameraManager(private val context: Context) {
 
     @OptIn(ExperimentalCamera2Interop::class)
     fun startCamera(lifecycleOwner: LifecycleOwner, cameraId: String, width: Int = 640, height: Int = 480, fps: Int = 30) {
+        if (boundCamera != null && activeCameraId == cameraId && activeResolution?.width == width && activeResolution?.height == height && activeFps == fps && lastLifecycleOwner == lifecycleOwner) {
+            return
+        }
+
         lastLifecycleOwner = lifecycleOwner
         activeCameraId = cameraId
         activeResolution = Resolution(width, height)
@@ -152,7 +159,7 @@ class CameraManager(private val context: Context) {
 
         val flowKey = "$cameraId:$width:$height:$fps"
         val flow = cameraFlows.getOrPut(flowKey) {
-            MutableSharedFlow(replay = 0, extraBufferCapacity = 5, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+            MutableSharedFlow(replay = 0, extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
         }
 
         val parts = cameraId.split(":")
@@ -174,7 +181,7 @@ class CameraManager(private val context: Context) {
         try {
             extender.setCaptureRequestOption(
                 CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-                Range(fps, fps)
+                Range(fps, maxOf(fps, 30))
             )
         } catch (e: Exception) {
             Log.w("CameraManager", "Could not set AE target FPS range", e)
@@ -271,15 +278,19 @@ class CameraManager(private val context: Context) {
     private fun processImage(imageProxy: ImageProxy, flow: MutableSharedFlow<ByteArray>, targetFps: Int) {
         try {
             if (flow.subscriptionCount.value == 0) {
+                imageProxy.close()
                 return
             }
             val now = System.currentTimeMillis()
             val minIntervalMs = if (targetFps > 0) 1000L / targetFps else 0L
             if (minIntervalMs > 0 && (now - lastFrameTimeMs) < minIntervalMs) {
+                imageProxy.close()
                 return
             }
             lastFrameTimeMs = now
 
+            val w = imageProxy.width
+            val h = imageProxy.height
             val yBuffer = imageProxy.planes[0].buffer
             val uBuffer = imageProxy.planes[1].buffer
             val vBuffer = imageProxy.planes[2].buffer
@@ -291,19 +302,36 @@ class CameraManager(private val context: Context) {
             vBuffer.get(nv21, ySize, vSize)
             uBuffer.get(nv21, ySize + vSize, uSize)
 
-            val yuvImage = YuvImage(nv21, ImageFormat.NV21, imageProxy.width, imageProxy.height, null)
-            val out = ByteArrayOutputStream()
-            yuvImage.compressToJpeg(Rect(0, 0, imageProxy.width, imageProxy.height), 60, out)
-            flow.tryEmit(out.toByteArray())
+            // Close imageProxy immediately so CameraX analyzer pipeline can proceed
+            imageProxy.close()
+
+            if (encoding.getAndSet(true)) {
+                return // encoder busy -> drop this frame
+            }
+
+            encodeExecutor.execute {
+                try {
+                    val yuv = YuvImage(nv21, ImageFormat.NV21, w, h, null)
+                    val out = ByteArrayOutputStream()
+                    yuv.compressToJpeg(Rect(0, 0, w, h), 50, out)
+                    flow.tryEmit(out.toByteArray())
+                } catch (e: Exception) {
+                    Log.e("CameraManager", "Encoding error", e)
+                } finally {
+                    encoding.set(false)
+                }
+            }
         } catch (e: Exception) {
             Log.e("CameraManager", "Processing error", e)
-        } finally {
-            imageProxy.close()
+            try {
+                imageProxy.close()
+            } catch (_: Exception) {}
         }
     }
 
     fun stopStreaming() {
         cameraProvider?.unbindAll()
+        boundCamera = null
         activeCameraId = null
         activeResolution = null
         activeFps = 30
