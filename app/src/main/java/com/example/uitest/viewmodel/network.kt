@@ -38,6 +38,10 @@ import kotlinx.coroutines.launch
 import java.util.Collections
 import kotlin.time.Duration.Companion.seconds
 
+private val MJPEG_PREFIX = "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ".toByteArray(Charsets.UTF_8)
+private val MJPEG_HEADER_END = "\r\n\r\n".toByteArray(Charsets.UTF_8)
+private val MJPEG_FRAME_END = "\r\n".toByteArray(Charsets.UTF_8)
+
 class DashboardServer(
     private val context: Context,
     private val port: Int = 8080,
@@ -1115,13 +1119,14 @@ class DashboardServer(
     }
 
     private suspend fun ByteWriteChannel.streamCamera(flow: Flow<ByteArray>, boundary: String) {
+        val prefix = if (boundary == "frame") MJPEG_PREFIX else "--$boundary\r\nContent-Type: image/jpeg\r\nContent-Length: ".toByteArray(Charsets.UTF_8)
         try {
             flow.collect { jpegBytes ->
-                writeStringUtf8("--$boundary\r\n")
-                writeStringUtf8("Content-Type: image/jpeg\r\n")
-                writeStringUtf8("Content-Length: ${jpegBytes.size}\r\n\r\n")
+                writeFully(prefix)
+                writeStringUtf8(jpegBytes.size.toString())
+                writeFully(MJPEG_HEADER_END)
                 writeFully(jpegBytes)
-                writeStringUtf8("\r\n")
+                writeFully(MJPEG_FRAME_END)
                 flush()
             }
         } catch (_: Exception) {

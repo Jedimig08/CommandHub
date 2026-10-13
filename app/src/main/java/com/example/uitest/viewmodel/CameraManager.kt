@@ -36,6 +36,7 @@ import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.core.Camera
 
 import kotlinx.serialization.Serializable
+import java.util.concurrent.atomic.AtomicReference
 
 @Serializable
 data class Resolution(val width: Int, val height: Int) {
@@ -58,6 +59,8 @@ class CameraManager(private val context: Context) {
     private val cameraExecutor = Executors.newSingleThreadExecutor()
     private val encodeExecutor = Executors.newSingleThreadExecutor()
     private val encoding = AtomicBoolean(false)
+    private val recycledNv21Buffer = AtomicReference<ByteArray?>(null)
+    private val encodeOutputStream = ByteArrayOutputStream(256 * 1024)
     private val cameraFlows = mutableMapOf<String, MutableSharedFlow<ByteArray>>()
     private var lastLifecycleOwner: LifecycleOwner? = null
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -297,7 +300,13 @@ class CameraManager(private val context: Context) {
             val ySize = yBuffer.remaining()
             val uSize = uBuffer.remaining()
             val vSize = vBuffer.remaining()
-            val nv21 = ByteArray(ySize + uSize + vSize)
+            val totalSize = ySize + uSize + vSize
+
+            var nv21 = recycledNv21Buffer.getAndSet(null)
+            if (nv21 == null || nv21.size != totalSize) {
+                nv21 = ByteArray(totalSize)
+            }
+
             yBuffer.get(nv21, 0, ySize)
             vBuffer.get(nv21, ySize, vSize)
             uBuffer.get(nv21, ySize + vSize, uSize)
@@ -306,18 +315,21 @@ class CameraManager(private val context: Context) {
             imageProxy.close()
 
             if (encoding.getAndSet(true)) {
+                recycledNv21Buffer.set(nv21)
                 return // encoder busy -> drop this frame
             }
 
+            val nv21Buf = nv21
             encodeExecutor.execute {
                 try {
-                    val yuv = YuvImage(nv21, ImageFormat.NV21, w, h, null)
-                    val out = ByteArrayOutputStream()
-                    yuv.compressToJpeg(Rect(0, 0, w, h), 50, out)
-                    flow.tryEmit(out.toByteArray())
+                    val yuv = YuvImage(nv21Buf, ImageFormat.NV21, w, h, null)
+                    encodeOutputStream.reset()
+                    yuv.compressToJpeg(Rect(0, 0, w, h), 50, encodeOutputStream)
+                    flow.tryEmit(encodeOutputStream.toByteArray())
                 } catch (e: Exception) {
                     Log.e("CameraManager", "Encoding error", e)
                 } finally {
+                    recycledNv21Buffer.set(nv21Buf)
                     encoding.set(false)
                 }
             }
