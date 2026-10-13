@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import android.hardware.camera2.CameraManager as Camera2Manager
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.camera.core.ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
@@ -122,12 +123,19 @@ class CameraManager(private val context: Context) {
 
     fun isReady(): Boolean = cameraProvider != null
 
-    fun getFlow(cameraId: String, width: Int = 640, height: Int = 480, fps: Int = 30): SharedFlow<ByteArray> {
-        val flowKey = "$cameraId:$width:$height:$fps"
+    fun getFlow(
+        cameraId: String,
+        width: Int = 640,
+        height: Int = 480,
+        fps: Int = 30,
+        quality: Int = 50
+    ): SharedFlow<ByteArray> {
+        cameraFlows.entries.removeAll { (_, f) -> f.subscriptionCount.value == 0 }
+        val flowKey = "$cameraId:$width:$height:$fps:$quality"
         val flow = cameraFlows.getOrPut(flowKey) {
             MutableSharedFlow(
                 replay = 0,
-                extraBufferCapacity = 1,
+                extraBufferCapacity = 2,
                 onBufferOverflow = BufferOverflow.DROP_OLDEST,
             )
         }
@@ -135,7 +143,7 @@ class CameraManager(private val context: Context) {
         mainHandler.post {
             lastLifecycleOwner?.let { owner ->
                 if ((activeCameraId != cameraId) || (activeResolution?.width != width) || (activeResolution?.height != height) || (activeFps != fps)) {
-                    startCamera(owner, cameraId, width, height, fps)
+                    startCamera(owner, cameraId, width, height, fps, quality)
                 }
             }
         }
@@ -144,7 +152,14 @@ class CameraManager(private val context: Context) {
     }
 
     @OptIn(ExperimentalCamera2Interop::class)
-    fun startCamera(lifecycleOwner: LifecycleOwner, cameraId: String, width: Int = 640, height: Int = 480, fps: Int = 30) {
+    fun startCamera(
+        lifecycleOwner: LifecycleOwner,
+        cameraId: String,
+        width: Int = 640,
+        height: Int = 480,
+        fps: Int = 30,
+        quality: Int = 50
+    ) {
         if (boundCamera != null && activeCameraId == cameraId && activeResolution?.width == width && activeResolution?.height == height && activeFps == fps && lastLifecycleOwner == lifecycleOwner) {
             return
         }
@@ -160,9 +175,9 @@ class CameraManager(private val context: Context) {
         // Stop everything else first to avoid conflicts - ensures only ONE camera/res/fps is active
         provider.unbindAll()
 
-        val flowKey = "$cameraId:$width:$height:$fps"
+        val flowKey = "$cameraId:$width:$height:$fps:$quality"
         val flow = cameraFlows.getOrPut(flowKey) {
-            MutableSharedFlow(replay = 0, extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+            MutableSharedFlow(replay = 0, extraBufferCapacity = 2, onBufferOverflow = BufferOverflow.DROP_OLDEST)
         }
 
         val parts = cameraId.split(":")
@@ -192,7 +207,7 @@ class CameraManager(private val context: Context) {
 
         val analysis = builder.build()
         analysis.setAnalyzer(cameraExecutor) { image ->
-            processImage(image, flow, fps)
+            processImage(image, flow, width, height, fps, quality)
         }
 
         val selector = CameraSelector.Builder()
@@ -278,53 +293,100 @@ class CameraManager(private val context: Context) {
 
     fun getDeviceName(): String = "${Build.MANUFACTURER} ${Build.MODEL}"
 
-    private fun processImage(imageProxy: ImageProxy, flow: MutableSharedFlow<ByteArray>, targetFps: Int) {
+    private fun processImage(
+        imageProxy: ImageProxy,
+        flow: MutableSharedFlow<ByteArray>,
+        targetWidth: Int,
+        targetHeight: Int,
+        targetFps: Int,
+        quality: Int = 50
+    ) {
         try {
             if (flow.subscriptionCount.value == 0) {
                 imageProxy.close()
                 return
             }
-            val now = System.currentTimeMillis()
+            val now = SystemClock.elapsedRealtime()
             val minIntervalMs = if (targetFps > 0) 1000L / targetFps else 0L
             if (minIntervalMs > 0 && (now - lastFrameTimeMs) < minIntervalMs) {
                 imageProxy.close()
                 return
             }
-            lastFrameTimeMs = now
 
-            val w = imageProxy.width
-            val h = imageProxy.height
-            val yBuffer = imageProxy.planes[0].buffer
-            val uBuffer = imageProxy.planes[1].buffer
-            val vBuffer = imageProxy.planes[2].buffer
-            val ySize = yBuffer.remaining()
-            val uSize = uBuffer.remaining()
-            val vSize = vBuffer.remaining()
-            val totalSize = ySize + uSize + vSize
+            val imgW = imageProxy.width
+            val imgH = imageProxy.height
+            val cropW = minOf(targetWidth, imgW)
+            val cropH = minOf(targetHeight, imgH)
 
+            val requiredNv21Size = imgW * imgH * 3 / 2
             var nv21 = recycledNv21Buffer.getAndSet(null)
-            if (nv21 == null || nv21.size != totalSize) {
-                nv21 = ByteArray(totalSize)
+            if (nv21 == null || nv21.size != requiredNv21Size) {
+                nv21 = ByteArray(requiredNv21Size)
             }
 
-            yBuffer.get(nv21, 0, ySize)
-            vBuffer.get(nv21, ySize, vSize)
-            uBuffer.get(nv21, ySize + vSize, uSize)
+            val yPlane = imageProxy.planes[0]
+            val uPlane = imageProxy.planes[1]
+            val vPlane = imageProxy.planes[2]
+
+            val yBuffer = yPlane.buffer
+            val uBuffer = uPlane.buffer
+            val vBuffer = vPlane.buffer
+
+            val yRowStride = yPlane.rowStride
+            val uvRowStride = uPlane.rowStride
+            val uvPixelStride = uPlane.pixelStride
+
+            // Copy Y plane row by row to strip padding if present
+            var nv21Offset = 0
+            if (yRowStride == imgW) {
+                yBuffer.get(nv21, 0, imgW * imgH)
+                nv21Offset = imgW * imgH
+            } else {
+                for (row in 0 until imgH) {
+                    yBuffer.position(row * yRowStride)
+                    yBuffer.get(nv21, nv21Offset, imgW)
+                    nv21Offset += imgW
+                }
+            }
+
+            // Copy UV planes interleaving V then U for NV21
+            val uvHeight = imgH / 2
+            val uvWidth = imgW / 2
+
+            if (uvPixelStride == 2 && uvRowStride == imgW && vBuffer.remaining() >= uvHeight * uvRowStride - 1) {
+                vBuffer.get(nv21, nv21Offset, uvHeight * uvRowStride - 1)
+                if (vBuffer.remaining() > 0) {
+                    nv21[requiredNv21Size - 1] = uBuffer.get(uBuffer.limit() - 1)
+                }
+            } else {
+                for (row in 0 until uvHeight) {
+                    val rowStart = row * uvRowStride
+                    for (col in 0 until uvWidth) {
+                        val vIndex = rowStart + col * uvPixelStride
+                        val uIndex = rowStart + col * uvPixelStride
+                        nv21[nv21Offset++] = vBuffer.get(vIndex)
+                        nv21[nv21Offset++] = uBuffer.get(uIndex)
+                    }
+                }
+            }
 
             // Close imageProxy immediately so CameraX analyzer pipeline can proceed
             imageProxy.close()
 
             if (encoding.getAndSet(true)) {
                 recycledNv21Buffer.set(nv21)
-                return // encoder busy -> drop this frame
+                return // encoder busy -> drop this frame without updating lastFrameTimeMs
             }
 
+            lastFrameTimeMs = now
+
             val nv21Buf = nv21
+            val jpegQuality = quality.coerceIn(10, 100)
             encodeExecutor.execute {
                 try {
-                    val yuv = YuvImage(nv21Buf, ImageFormat.NV21, w, h, null)
+                    val yuv = YuvImage(nv21Buf, ImageFormat.NV21, imgW, imgH, null)
                     encodeOutputStream.reset()
-                    yuv.compressToJpeg(Rect(0, 0, w, h), 50, encodeOutputStream)
+                    yuv.compressToJpeg(Rect(0, 0, cropW, cropH), jpegQuality, encodeOutputStream)
                     flow.tryEmit(encodeOutputStream.toByteArray())
                 } catch (e: Exception) {
                     Log.e("CameraManager", "Encoding error", e)

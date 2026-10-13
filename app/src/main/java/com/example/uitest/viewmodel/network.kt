@@ -34,6 +34,7 @@ import io.ktor.websocket.send
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import java.util.Collections
 import kotlin.time.Duration.Companion.seconds
@@ -773,6 +774,7 @@ class DashboardServer(
                     val isMinimal = call.request.queryParameters["minimal"] == "true"
                     val initialRes = call.request.queryParameters["res"] ?: "640x480"
                     val initialFps = call.request.queryParameters["fps"]?.toIntOrNull() ?: 30
+                    val initialQuality = call.request.queryParameters["quality"]?.toIntOrNull() ?: 50
                     val cameras = cameraManager.getCameraInfos()
                     val currentCamera = cameras.find { it.id == cameraId }
 
@@ -789,6 +791,11 @@ class DashboardServer(
                         "<button onclick=\"changeFps($fps)\">$fps FPS</button>"
                     }
 
+                    val qualityList = listOf(20, 35, 50, 75, 90)
+                    val qualityOptions = qualityList.joinToString("") { q ->
+                        "<button onclick=\"changeQuality($q)\">$q%</button>"
+                    }
+
                     val html = """
                         <html>
                         <head>
@@ -796,7 +803,7 @@ class DashboardServer(
                             <style>
                                 body { margin: 0; background: #000; color: #fff; font-family: sans-serif; text-align: center; }
                                 .header { padding: 20px; background: #111; display: ${if (isMinimal) "none" else "block"}; }
-                                img { max-width: 100%; height: auto; border: 2px solid #333; margin-top: ${if (isMinimal) "0" else "10px"}; }
+                                canvas { max-width: 100%; height: auto; border: 2px solid #333; margin-top: ${if (isMinimal) "0" else "10px"}; }
                                 .nav { padding: 10px; }
                                 .res-picker { padding: 10px; background: rgba(34,34,34,0.8); position: ${if (isMinimal) "fixed" else "static"}; top: 0; width: 100%; z-index: 100; }
                                 .picker-group { margin: 4px 0; }
@@ -812,7 +819,10 @@ class DashboardServer(
                                 const urlParams = new URLSearchParams(window.location.search);
                                 let currentRes = urlParams.get('res') || '$initialRes';
                                 let currentFps = urlParams.get('fps') || '$initialFps';
+                                let currentQuality = urlParams.get('quality') || '$initialQuality';
                                 let idleTimer;
+                                let reconnectTimer = null;
+                                let cameraWs = null;
 
                                 function resetIdleTimer() {
                                     const header = document.querySelector('.header');
@@ -827,17 +837,55 @@ class DashboardServer(
                                     }, 3000);
                                 }
 
-                                function updateStream() {
-                                    const img = document.getElementById('stream');
-                                    img.src = '/stream/$cameraId?res=' + currentRes + '&fps=' + currentFps + '&t=' + Date.now();
+                                function debouncedConnect() {
+                                    clearTimeout(reconnectTimer);
+                                    reconnectTimer = setTimeout(() => {
+                                        connectCameraWs();
+                                    }, 100);
                                 }
+
+                                function connectCameraWs() {
+                                    if (cameraWs) {
+                                        try { cameraWs.close(); } catch(e){}
+                                    }
+                                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                                    const wsUrl = protocol + '//' + window.location.host + '/camera-ws/$cameraId?res=' + currentRes + '&fps=' + currentFps + '&quality=' + currentQuality;
+                                    cameraWs = new WebSocket(wsUrl);
+                                    cameraWs.binaryType = 'arraybuffer';
+
+                                    const canvas = document.getElementById('canvas');
+                                    const ctx = canvas ? canvas.getContext('2d') : null;
+
+                                    cameraWs.onmessage = async function(event) {
+                                        try {
+                                            const blob = new Blob([event.data], { type: 'image/jpeg' });
+                                            const bitmap = await createImageBitmap(blob);
+                                            if (canvas && ctx) {
+                                                if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
+                                                    canvas.width = bitmap.width;
+                                                    canvas.height = bitmap.height;
+                                                }
+                                                ctx.drawImage(bitmap, 0, 0);
+                                            }
+                                            bitmap.close();
+                                        } catch(e) {}
+                                    };
+                                }
+
                                 function changeRes(res) {
+                                    if (currentRes === res) return;
                                     currentRes = res;
-                                    updateStream();
+                                    debouncedConnect();
                                 }
                                 function changeFps(fps) {
+                                    if (currentFps == fps) return;
                                     currentFps = fps;
-                                    updateStream();
+                                    debouncedConnect();
+                                }
+                                function changeQuality(q) {
+                                    if (currentQuality == q) return;
+                                    currentQuality = q;
+                                    debouncedConnect();
                                 }
                                 async function toggleFlashlight() {
                                     try {
@@ -855,16 +903,8 @@ class DashboardServer(
                                         if (btn) btn.style.background = data.enabled ? '#34C759' : '#FF9500';
                                     } catch (e) {}
                                 }
-                                function checkStream() {
-                                    const img = document.getElementById('stream');
-                                    setTimeout(() => {
-                                        if (img.naturalWidth === 0) {
-                                            img.src = img.src.split('&t=')[0] + '&t=' + Date.now();
-                                        }
-                                    }, 3000);
-                                }
                                 window.onload = () => {
-                                    checkStream();
+                                    connectCameraWs();
                                     checkFlashlight();
                                     resetIdleTimer();
                                     document.addEventListener('mousemove', resetIdleTimer);
@@ -888,10 +928,13 @@ class DashboardServer(
                                     <strong>Frame Rate (FPS):</strong> $fpsOptions
                                 </div>
                                 <div class="picker-group">
+                                    <strong>JPEG Quality:</strong> $qualityOptions
+                                </div>
+                                <div class="picker-group">
                                     <strong>Flashlight:</strong> <button id="flashBtn" onclick="toggleFlashlight()" style="background:#FF9500;">Toggle Flashlight</button>
                                 </div>
                             </div>
-                            <img id="stream" src="/stream/$cameraId?res=$initialRes&fps=$initialFps">
+                            <canvas id="canvas"></canvas>
                             <div class="min-toggle">
                                 <a href="?minimal=${!isMinimal}" style="color:white; font-size:10px;">[Toggle UI]</a>
                             </div>
@@ -901,17 +944,37 @@ class DashboardServer(
                     call.respondText(html, ContentType.Text.Html)
                 }
 
+                webSocket("/camera-ws/{id}") {
+                    val cameraId = call.parameters["id"] ?: return@webSocket
+                    val resParam = call.request.queryParameters["res"] ?: "640x480"
+                    val fpsParam = call.request.queryParameters["fps"]?.toIntOrNull() ?: 30
+                    val qualityParam = call.request.queryParameters["quality"]?.toIntOrNull() ?: 50
+                    val parts = resParam.split("x")
+                    val width = parts.getOrNull(0)?.toIntOrNull() ?: 640
+                    val height = parts.getOrNull(1)?.toIntOrNull() ?: 480
+
+                    val flow = cameraManager.getFlow(cameraId, width, height, fpsParam, qualityParam)
+                    try {
+                        flow.conflate().collect { jpegBytes ->
+                            send(Frame.Binary(true, jpegBytes))
+                        }
+                    } catch (_: Exception) {
+                        // Disconnected
+                    }
+                }
+
                 get("/stream/{id}") {
                     val cameraId = call.parameters["id"] ?: return@get
                     val resParam = call.request.queryParameters["res"] ?: "640x480"
                     val fpsParam = call.request.queryParameters["fps"]?.toIntOrNull() ?: 30
+                    val qualityParam = call.request.queryParameters["quality"]?.toIntOrNull() ?: 50
                     val parts = resParam.split("x")
                     val width = parts.getOrNull(0)?.toIntOrNull() ?: 640
                     val height = parts.getOrNull(1)?.toIntOrNull() ?: 480
 
                     val boundary = "frame"
                     call.respondBytesWriter(contentType = ContentType.parse("multipart/x-mixed-replace; boundary=$boundary")) {
-                        streamCamera(cameraManager.getFlow(cameraId, width, height, fpsParam), boundary)
+                        streamCamera(cameraManager.getFlow(cameraId, width, height, fpsParam, qualityParam), boundary)
                     }
                 }
 
@@ -1121,7 +1184,7 @@ class DashboardServer(
     private suspend fun ByteWriteChannel.streamCamera(flow: Flow<ByteArray>, boundary: String) {
         val prefix = if (boundary == "frame") MJPEG_PREFIX else "--$boundary\r\nContent-Type: image/jpeg\r\nContent-Length: ".toByteArray(Charsets.UTF_8)
         try {
-            flow.collect { jpegBytes ->
+            flow.conflate().collect { jpegBytes ->
                 writeFully(prefix)
                 writeStringUtf8(jpegBytes.size.toString())
                 writeFully(MJPEG_HEADER_END)
