@@ -1,4 +1,4 @@
-package com.example.uitest
+package com.commandhub
 
 import org.junit.Test
 

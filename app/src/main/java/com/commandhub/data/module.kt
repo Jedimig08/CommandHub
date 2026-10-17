@@ -1,4 +1,4 @@
-package com.example.uitest.data
+package com.commandhub.data
 
 import androidx.compose.ui.graphics.Color
 import kotlinx.serialization.Serializable

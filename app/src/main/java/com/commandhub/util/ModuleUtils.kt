@@ -1,7 +1,7 @@
-package com.example.uitest.util
+package com.commandhub.util
 
 import androidx.compose.runtime.snapshots.SnapshotStateList
-import com.example.uitest.data.ModuleConfig
+import com.commandhub.data.ModuleConfig
 
 fun moveModule(
     modules: SnapshotStateList<ModuleConfig>,

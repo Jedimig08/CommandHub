@@ -1,4 +1,4 @@
-package com.example.uitest.ui.theme
+package com.commandhub.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

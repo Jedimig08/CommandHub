@@ -1,4 +1,4 @@
-package com.example.uitest.util
+package com.commandhub.util
 
 import android.app.Activity
 import android.view.WindowManager

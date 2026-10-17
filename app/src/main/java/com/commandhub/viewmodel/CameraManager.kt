@@ -1,10 +1,13 @@
-package com.example.uitest.viewmodel
+package com.commandhub.viewmodel
 
 import android.content.Context
 import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
 import android.hardware.camera2.CameraCharacteristics
+import android.media.MediaCodec
+import android.media.MediaCodecInfo
+import android.media.MediaFormat
 import android.hardware.camera2.CaptureRequest
 import android.util.Log
 import androidx.annotation.OptIn
@@ -63,6 +66,9 @@ class CameraManager(private val context: Context) {
     private val recycledNv21Buffer = AtomicReference<ByteArray?>(null)
     private val encodeOutputStream = ByteArrayOutputStream(256 * 1024)
     private val cameraFlows = mutableMapOf<String, MutableSharedFlow<ByteArray>>()
+    private val h264Flows = mutableMapOf<String, MutableSharedFlow<ByteArray>>()
+    private var h264Encoder: HardwareH264Encoder? = null
+    private var activeH264Config: String? = null
     private var lastLifecycleOwner: LifecycleOwner? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var activeCameraId: String? = null
@@ -403,11 +409,330 @@ class CameraManager(private val context: Context) {
         }
     }
 
+    fun getH264SpsPps(): ByteArray? = h264Encoder?.getSpsPps()
+
+    fun getH264Flow(
+        cameraId: String,
+        width: Int = 640,
+        height: Int = 480,
+        fps: Int = 30,
+        bitrate: Int = 2_000_000
+    ): SharedFlow<ByteArray> {
+        h264Flows.entries.removeAll { (_, f) -> f.subscriptionCount.value == 0 }
+        val flowKey = "$cameraId:$width:$height:$fps:$bitrate"
+        val flow = h264Flows.getOrPut(flowKey) {
+            MutableSharedFlow(
+                replay = 0,
+                extraBufferCapacity = 10,
+                onBufferOverflow = BufferOverflow.DROP_OLDEST,
+            )
+        }
+
+        mainHandler.post {
+            lastLifecycleOwner?.let { owner ->
+                val config = "$cameraId:$width:$height:$fps:$bitrate"
+                if (activeH264Config != config || boundCamera == null) {
+                    startH264Camera(owner, cameraId, width, height, fps, bitrate, flow)
+                }
+            }
+        }
+
+        return flow
+    }
+
+    @OptIn(ExperimentalCamera2Interop::class)
+    private fun startH264Camera(
+        lifecycleOwner: LifecycleOwner,
+        cameraId: String,
+        width: Int,
+        height: Int,
+        fps: Int,
+        bitrate: Int,
+        flow: MutableSharedFlow<ByteArray>
+    ) {
+        val config = "$cameraId:$width:$height:$fps:$bitrate"
+        if (activeH264Config == config && boundCamera != null) return
+
+        h264Encoder?.stop()
+        val encoder = HardwareH264Encoder(width, height, fps, bitrate) { nalBytes, _ ->
+            flow.tryEmit(nalBytes)
+        }
+        encoder.start()
+        h264Encoder = encoder
+
+        lastLifecycleOwner = lifecycleOwner
+        activeCameraId = cameraId
+        activeResolution = Resolution(width, height)
+        activeFps = fps
+        activeH264Config = config
+        lastFrameTimeMs = 0L
+
+        val provider = cameraProvider ?: return
+        provider.unbindAll()
+
+        val parts = cameraId.split(":")
+        val logicalId = parts[0]
+
+        val builder = ImageAnalysis.Builder()
+            .setBackpressureStrategy(STRATEGY_KEEP_ONLY_LATEST)
+            .setResolutionSelector(
+                ResolutionSelector.Builder()
+                    .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                    .setResolutionStrategy(ResolutionStrategy(Size(width, height), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER))
+                    .build()
+            )
+
+        val extender = Camera2Interop.Extender(builder)
+        if (parts.size == 2 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            extender.setPhysicalCameraId(parts[1])
+        }
+        try {
+            extender.setCaptureRequestOption(
+                CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+                Range(fps, maxOf(fps, 30))
+            )
+        } catch (e: Exception) {
+            Log.w("CameraManager", "Could not set AE target FPS range", e)
+        }
+
+        val analysis = builder.build()
+        analysis.setAnalyzer(cameraExecutor) { image ->
+            processH264Image(image, flow, fps, encoder)
+        }
+
+        val selector = CameraSelector.Builder()
+            .addCameraFilter { infos ->
+                infos.filter { Camera2CameraInfo.from(it).cameraId == logicalId }
+            }
+            .build()
+
+        try {
+            boundCamera = provider.bindToLifecycle(lifecycleOwner, selector, analysis)
+            if (isFlashlightOn) {
+                try { boundCamera?.cameraControl?.enableTorch(true) } catch (_: Exception) {}
+            }
+            Log.d("CameraManager", "Bound camera $cameraId for H.264 at ${width}x$height @ ${fps}FPS")
+        } catch (e: Exception) {
+            Log.e("CameraManager", "Failed to bind camera $cameraId for H.264", e)
+        }
+    }
+
+    private fun processH264Image(
+        imageProxy: ImageProxy,
+        flow: MutableSharedFlow<ByteArray>,
+        targetFps: Int,
+        encoder: HardwareH264Encoder
+    ) {
+        try {
+            if (flow.subscriptionCount.value == 0) {
+                imageProxy.close()
+                return
+            }
+            val now = SystemClock.elapsedRealtime()
+            val minIntervalMs = if (targetFps > 0) 1000L / targetFps else 0L
+            if (minIntervalMs > 0 && (now - lastFrameTimeMs) < minIntervalMs) {
+                imageProxy.close()
+                return
+            }
+
+            val imgW = imageProxy.width
+            val imgH = imageProxy.height
+
+            val requiredNv21Size = imgW * imgH * 3 / 2
+            var nv21 = recycledNv21Buffer.getAndSet(null)
+            if (nv21 == null || nv21.size != requiredNv21Size) {
+                nv21 = ByteArray(requiredNv21Size)
+            }
+
+            val yPlane = imageProxy.planes[0]
+            val uPlane = imageProxy.planes[1]
+            val vPlane = imageProxy.planes[2]
+
+            val yBuffer = yPlane.buffer
+            val uBuffer = uPlane.buffer
+            val vBuffer = vPlane.buffer
+
+            val yRowStride = yPlane.rowStride
+            val uvRowStride = uPlane.rowStride
+            val uvPixelStride = uPlane.pixelStride
+
+            var nv21Offset = 0
+            if (yRowStride == imgW) {
+                yBuffer.get(nv21, 0, imgW * imgH)
+                nv21Offset = imgW * imgH
+            } else {
+                for (row in 0 until imgH) {
+                    yBuffer.position(row * yRowStride)
+                    yBuffer.get(nv21, nv21Offset, imgW)
+                    nv21Offset += imgW
+                }
+            }
+
+            val uvHeight = imgH / 2
+            val uvWidth = imgW / 2
+
+            if (uvPixelStride == 2 && uvRowStride == imgW && vBuffer.remaining() >= uvHeight * uvRowStride - 1) {
+                vBuffer.get(nv21, nv21Offset, uvHeight * uvRowStride - 1)
+                if (vBuffer.remaining() > 0) {
+                    nv21[requiredNv21Size - 1] = uBuffer.get(uBuffer.limit() - 1)
+                }
+            } else {
+                for (row in 0 until uvHeight) {
+                    val rowStart = row * uvRowStride
+                    for (col in 0 until uvWidth) {
+                        val vIndex = rowStart + col * uvPixelStride
+                        val uIndex = rowStart + col * uvPixelStride
+                        nv21[nv21Offset++] = vBuffer.get(vIndex)
+                        nv21[nv21Offset++] = uBuffer.get(uIndex)
+                    }
+                }
+            }
+
+            imageProxy.close()
+
+            if (encoding.getAndSet(true)) {
+                recycledNv21Buffer.set(nv21)
+                return
+            }
+
+            lastFrameTimeMs = now
+            val ptsUs = System.nanoTime() / 1000L
+            val nv21Buf = nv21
+
+            encodeExecutor.execute {
+                try {
+                    encoder.encodeNv21(nv21Buf, ptsUs)
+                } catch (e: Exception) {
+                    Log.e("CameraManager", "H264 Encoding error", e)
+                } finally {
+                    recycledNv21Buffer.set(nv21Buf)
+                    encoding.set(false)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("CameraManager", "Processing H264 error", e)
+            try {
+                imageProxy.close()
+            } catch (_: Exception) {}
+        }
+    }
+
     fun stopStreaming() {
+        h264Encoder?.stop()
+        h264Encoder = null
+        activeH264Config = null
         cameraProvider?.unbindAll()
         boundCamera = null
         activeCameraId = null
         activeResolution = null
         activeFps = 30
+    }
+}
+
+@Suppress("DEPRECATION")
+class HardwareH264Encoder(
+    private val width: Int,
+    private val height: Int,
+    private val fps: Int = 30,
+    private val bitrate: Int = 2_000_000,
+    private val onOutputNal: (ByteArray, Boolean) -> Unit
+) {
+    private var mediaCodec: MediaCodec? = null
+    @Volatile private var isRunning = false
+    private var spsPpsData: ByteArray? = null
+
+    fun getSpsPps(): ByteArray? = spsPpsData
+
+    fun start() {
+        if (isRunning) return
+        try {
+            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
+                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar)
+                setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
+                setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            }
+
+            val codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+            codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            codec.start()
+            mediaCodec = codec
+            isRunning = true
+            Log.d("H264Encoder", "Hardware MediaCodec H.264 encoder started at ${width}x${height} @ ${fps}FPS (${bitrate / 1000}kbps)")
+        } catch (e: Exception) {
+            Log.e("H264Encoder", "Failed to start MediaCodec H.264 encoder", e)
+            stop()
+        }
+    }
+
+    fun encodeNv21(nv21: ByteArray, ptsUs: Long) {
+        val codec = mediaCodec ?: return
+        if (!isRunning) return
+
+        try {
+            val inputIndex = codec.dequeueInputBuffer(10_000L)
+            if (inputIndex >= 0) {
+                val inputBuffer = codec.getInputBuffer(inputIndex)
+                if (inputBuffer != null) {
+                    inputBuffer.clear()
+                    val nv12 = nv21ToNv12(nv21, width, height)
+                    val sizeToCopy = minOf(nv12.size, inputBuffer.remaining())
+                    inputBuffer.put(nv12, 0, sizeToCopy)
+                    codec.queueInputBuffer(inputIndex, 0, sizeToCopy, ptsUs, 0)
+                }
+            }
+
+            val bufferInfo = MediaCodec.BufferInfo()
+            var outputIndex = codec.dequeueOutputBuffer(bufferInfo, 0L)
+            while (outputIndex >= 0) {
+                val outputBuffer = codec.getOutputBuffer(outputIndex)
+                if (outputBuffer != null && bufferInfo.size > 0) {
+                    outputBuffer.position(bufferInfo.offset)
+                    outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
+                    val outData = ByteArray(bufferInfo.size)
+                    outputBuffer.get(outData)
+
+                    val isConfig = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0
+                    val isKeyFrame = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0
+
+                    if (isConfig) {
+                        spsPpsData = outData
+                        onOutputNal(outData, true)
+                    } else {
+                        onOutputNal(outData, isKeyFrame)
+                    }
+                }
+                codec.releaseOutputBuffer(outputIndex, false)
+                outputIndex = codec.dequeueOutputBuffer(bufferInfo, 0L)
+            }
+        } catch (e: Exception) {
+            Log.e("H264Encoder", "Encoding error", e)
+        }
+    }
+
+    fun stop() {
+        isRunning = false
+        try {
+            mediaCodec?.stop()
+            mediaCodec?.release()
+        } catch (e: Exception) {
+            Log.w("H264Encoder", "Error stopping MediaCodec", e)
+        } finally {
+            mediaCodec = null
+        }
+    }
+
+    private fun nv21ToNv12(nv21: ByteArray, width: Int, height: Int): ByteArray {
+        val size = width * height
+        val nv12 = ByteArray(nv21.size)
+        System.arraycopy(nv21, 0, nv12, 0, minOf(size, nv21.size))
+        var i = size
+        val maxLen = nv21.size - 1
+        while (i < maxLen) {
+            nv12[i] = nv21[i + 1]
+            nv12[i + 1] = nv21[i]
+            i += 2
+        }
+        return nv12
     }
 }

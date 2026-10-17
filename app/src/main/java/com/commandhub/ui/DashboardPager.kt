@@ -1,4 +1,4 @@
-package com.example.uitest.ui
+package com.commandhub.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
@@ -10,8 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.uitest.util.KeepScreenOn
-import com.example.uitest.viewmodel.DashboardViewModel
+import com.commandhub.util.KeepScreenOn
+import com.commandhub.viewmodel.DashboardViewModel
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

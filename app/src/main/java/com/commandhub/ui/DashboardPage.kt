@@ -1,4 +1,4 @@
-package com.example.uitest.ui
+package com.commandhub.ui
 
 import android.graphics.BitmapFactory
 import android.widget.Toast
@@ -58,9 +58,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.uitest.data.ModuleConfig
-import com.example.uitest.util.moveModule
-import com.example.uitest.viewmodel.DashboardViewModel
+import com.commandhub.data.ModuleConfig
+import com.commandhub.util.moveModule
+import com.commandhub.viewmodel.DashboardViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

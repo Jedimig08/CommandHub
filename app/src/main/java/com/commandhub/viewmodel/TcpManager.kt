@@ -1,4 +1,4 @@
-package com.example.uitest.viewmodel
+package com.commandhub.viewmodel
 
 import android.util.Log
 import kotlinx.coroutines.flow.MutableSharedFlow

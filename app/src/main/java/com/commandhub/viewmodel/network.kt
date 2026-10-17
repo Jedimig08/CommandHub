@@ -1,5 +1,6 @@
-package com.example.uitest.viewmodel
+package com.commandhub.viewmodel
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
@@ -14,6 +15,7 @@ import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.request.receive
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytesWriter
@@ -36,12 +38,22 @@ import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 import java.util.Collections
 import kotlin.time.Duration.Companion.seconds
 
 private val MJPEG_PREFIX = "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ".toByteArray(Charsets.UTF_8)
 private val MJPEG_HEADER_END = "\r\n\r\n".toByteArray(Charsets.UTF_8)
 private val MJPEG_FRAME_END = "\r\n".toByteArray(Charsets.UTF_8)
+
+@Serializable
+data class LogRequest(val id: String = "", val text: String = "")
+
+@Serializable
+data class TcpConnectRequest(val ip: String = "", val port: Int = 8888)
+
+@Serializable
+data class FlashlightRequest(val enabled: Boolean = false)
 
 class DashboardServer(
     private val context: Context,
@@ -440,6 +452,7 @@ class DashboardServer(
     private val registeredEndpoints =
         Collections.synchronizedList(mutableListOf<Pair<String, String>>())
 
+    @SuppressLint("WakelockTimeout")
     fun start() {
         registeredEndpoints.clear()
         // Acquire Locks to prevent sleep and throttling
@@ -456,7 +469,8 @@ class DashboardServer(
                 "CommandHub:WakeLock",
             ).apply {
                 setReferenceCounted(false)
-                acquire(10 * 60 * 1000L)
+                // Held until stop() releases it, so the server stays alive while the app runs.
+                acquire()
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -515,12 +529,9 @@ class DashboardServer(
                 }
 
                 post("/api/log") {
-                    val body = call.receiveText()
                     try {
-                        val json = kotlinx.serialization.json.Json.parseToJsonElement(body).let { it as kotlinx.serialization.json.JsonObject }
-                        val id = json["id"]?.let { it as kotlinx.serialization.json.JsonPrimitive }?.content ?: ""
-                        val text = json["text"]?.let { it as kotlinx.serialization.json.JsonPrimitive }?.content ?: ""
-                        onLogReceived(id, text)
+                        val request = call.receive<LogRequest>()
+                        onLogReceived(request.id, request.text)
                         call.respond(HttpStatusCode.OK)
                     } catch (_: Exception) {
                         call.respond(HttpStatusCode.BadRequest)
@@ -661,12 +672,9 @@ class DashboardServer(
                 }
 
                 post("/tcp-connect") {
-                    val body = call.receiveText()
                     try {
-                        val json = kotlinx.serialization.json.Json.parseToJsonElement(body).let { it as kotlinx.serialization.json.JsonObject }
-                        val ip = json["ip"]?.let { it as kotlinx.serialization.json.JsonPrimitive }?.content ?: ""
-                        val port = json["port"]?.let { it as kotlinx.serialization.json.JsonPrimitive }?.content?.toIntOrNull() ?: 8888
-                        val result = tcpManager.connect(ip, port)
+                        val request = call.receive<TcpConnectRequest>()
+                        val result = tcpManager.connect(request.ip, request.port)
                         call.respondText(result)
                     } catch (_: Exception) {
                         call.respondText("Invalid connection parameters", status = HttpStatusCode.BadRequest)
@@ -820,9 +828,11 @@ class DashboardServer(
                                 let currentRes = urlParams.get('res') || '$initialRes';
                                 let currentFps = urlParams.get('fps') || '$initialFps';
                                 let currentQuality = urlParams.get('quality') || '$initialQuality';
+                                let mode = 'h264';
                                 let idleTimer;
                                 let reconnectTimer = null;
                                 let cameraWs = null;
+                                let h264Decoder = null;
 
                                 function resetIdleTimer() {
                                     const header = document.querySelector('.header');
@@ -840,14 +850,77 @@ class DashboardServer(
                                 function debouncedConnect() {
                                     clearTimeout(reconnectTimer);
                                     reconnectTimer = setTimeout(() => {
-                                        connectCameraWs();
+                                        if (mode === 'h264') connectH264Ws();
+                                        else connectCameraWs();
                                     }, 100);
                                 }
 
-                                function connectCameraWs() {
-                                    if (cameraWs) {
-                                        try { cameraWs.close(); } catch(e){}
+                                function switchMode(m) {
+                                    mode = m;
+                                    document.getElementById('btnH264').style.background = m === 'h264' ? '#34C759' : '#444';
+                                    document.getElementById('btnJpeg').style.background = m === 'jpeg' ? '#34C759' : '#444';
+                                    debouncedConnect();
+                                }
+
+                                function connectH264Ws() {
+                                    if (cameraWs) { try { cameraWs.close(); } catch(e){} }
+                                    if (typeof VideoDecoder === 'undefined') {
+                                        switchMode('jpeg');
+                                        return;
                                     }
+
+                                    const canvas = document.getElementById('canvas');
+                                    const ctx = canvas ? canvas.getContext('2d') : null;
+
+                                    if (h264Decoder) { try { h264Decoder.close(); } catch(e){} }
+                                    try {
+                                        h264Decoder = new VideoDecoder({
+                                            output: (frame) => {
+                                                if (canvas && ctx) {
+                                                    if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
+                                                        canvas.width = frame.displayWidth;
+                                                        canvas.height = frame.displayHeight;
+                                                    }
+                                                    ctx.drawImage(frame, 0, 0);
+                                                }
+                                                frame.close();
+                                            },
+                                            error: (e) => {
+                                                console.error('H264 decode error:', e);
+                                                switchMode('jpeg');
+                                            }
+                                        });
+                                        h264Decoder.configure({ codec: 'avc1.42E01E', optimizeForLatency: true });
+                                    } catch (e) {
+                                        switchMode('jpeg');
+                                        return;
+                                    }
+
+                                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                                    const wsUrl = protocol + '//' + window.location.host + '/h264-ws/$cameraId?res=' + currentRes + '&fps=' + currentFps;
+                                    cameraWs = new WebSocket(wsUrl);
+                                    cameraWs.binaryType = 'arraybuffer';
+
+                                    cameraWs.onmessage = function(event) {
+                                        if (h264Decoder && h264Decoder.state === 'configured') {
+                                            try {
+                                                const chunk = new EncodedVideoChunk({
+                                                    type: 'key',
+                                                    timestamp: performance.now() * 1000,
+                                                    data: event.data
+                                                });
+                                                h264Decoder.decode(chunk);
+                                            } catch(e) {}
+                                        }
+                                    };
+
+                                    cameraWs.onerror = function() {
+                                        switchMode('jpeg');
+                                    };
+                                }
+
+                                function connectCameraWs() {
+                                    if (cameraWs) { try { cameraWs.close(); } catch(e){} }
                                     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                                     const wsUrl = protocol + '//' + window.location.host + '/camera-ws/$cameraId?res=' + currentRes + '&fps=' + currentFps + '&quality=' + currentQuality;
                                     cameraWs = new WebSocket(wsUrl);
@@ -904,7 +977,7 @@ class DashboardServer(
                                     } catch (e) {}
                                 }
                                 window.onload = () => {
-                                    connectCameraWs();
+                                    connectH264Ws();
                                     checkFlashlight();
                                     resetIdleTimer();
                                     document.addEventListener('mousemove', resetIdleTimer);
@@ -921,6 +994,11 @@ class DashboardServer(
                                 </div>
                             </div>
                             <div class="res-picker">
+                                <div class="picker-group">
+                                    <strong>Streaming Mode:</strong>
+                                    <button id="btnH264" onclick="switchMode('h264')" style="background:#34C759;">Hardware H.264 (WebCodecs)</button>
+                                    <button id="btnJpeg" onclick="switchMode('jpeg')">WebSocket JPEG</button>
+                                </div>
                                 <div class="picker-group">
                                     <strong>Resolutions:</strong> $resOptions
                                 </div>
@@ -942,6 +1020,32 @@ class DashboardServer(
                         </html>
                     """.trimIndent()
                     call.respondText(html, ContentType.Text.Html)
+                }
+
+                webSocket("/h264-ws/{id}") {
+                    val cameraId = call.parameters["id"] ?: return@webSocket
+                    val resParam = call.request.queryParameters["res"] ?: "640x480"
+                    val fpsParam = call.request.queryParameters["fps"]?.toIntOrNull() ?: 30
+                    val bitrateParam = call.request.queryParameters["bitrate"]?.toIntOrNull() ?: 2_000_000
+                    val parts = resParam.split("x")
+                    val width = parts.getOrNull(0)?.toIntOrNull() ?: 640
+                    val height = parts.getOrNull(1)?.toIntOrNull() ?: 480
+
+                    val flow = cameraManager.getH264Flow(cameraId, width, height, fpsParam, bitrateParam)
+
+                    cameraManager.getH264SpsPps()?.let { spsPps ->
+                        try {
+                            send(Frame.Binary(true, spsPps))
+                        } catch (_: Exception) {}
+                    }
+
+                    try {
+                        flow.conflate().collect { nalBytes ->
+                            send(Frame.Binary(true, nalBytes))
+                        }
+                    } catch (_: Exception) {
+                        // Disconnected
+                    }
                 }
 
                 webSocket("/camera-ws/{id}") {
@@ -1140,8 +1244,9 @@ class DashboardServer(
                 }
 
                 post("/api/flashlight") {
-                    val text = call.receiveText()
-                    val enable = text.contains("true") || call.request.queryParameters["enabled"] == "true"
+                    val request = runCatching { call.receive<FlashlightRequest>() }.getOrNull()
+                    val enable = request?.enabled
+                        ?: (call.request.queryParameters["enabled"] == "true")
                     cameraManager.setFlashlight(enable)
                     call.respond(mapOf("enabled" to cameraManager.isFlashlightOn()))
                 }

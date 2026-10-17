@@ -1,4 +1,4 @@
-package com.example.uitest.viewmodel
+package com.commandhub.viewmodel
 
 import android.app.Application
 import android.content.Context
@@ -12,11 +12,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.lifecycle.AndroidViewModel
-import com.example.uitest.data.LayoutConfig
-import com.example.uitest.data.LayoutRepository
-import com.example.uitest.data.ModuleConfig
-import com.example.uitest.data.ModuleData
-import com.example.uitest.data.Widget
+import com.commandhub.data.LayoutConfig
+import com.commandhub.data.LayoutRepository
+import com.commandhub.data.ModuleConfig
+import com.commandhub.data.ModuleData
+import com.commandhub.data.Widget
 import kotlinx.serialization.json.Json
 
 

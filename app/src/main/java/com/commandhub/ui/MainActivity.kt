@@ -1,4 +1,4 @@
-package com.example.uitest.ui
+package com.commandhub.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -14,7 +14,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.example.uitest.viewmodel.DashboardViewModel
+import com.commandhub.viewmodel.DashboardViewModel
 
 class MainActivity : ComponentActivity() {
 

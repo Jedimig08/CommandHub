@@ -1,17 +1,17 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.0"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.21"
 }
 
 android {
-    namespace = "com.example.uitest"
+    namespace = "com.commandhub"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "com.example.uitest"
+        applicationId = "com.commandhub"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

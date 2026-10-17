@@ -1,4 +1,4 @@
-package com.example.uitest.viewmodel
+package com.commandhub.viewmodel
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
