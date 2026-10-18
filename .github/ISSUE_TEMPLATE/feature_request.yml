@@ -1,0 +1,59 @@
+name: Feature request
+description: Suggest a new capability or improvement for CommandHub
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        CommandHub is built around a modular architecture — new communication protocols
+        and dashboard widgets are designed to slot in without large changes.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the use case or limitation you're running into.
+      placeholder: I need to talk to BLE peripherals, which CommandHub doesn't support yet...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Describe the solution you'd like
+      description: What should CommandHub do?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which subsystem would this touch?
+      options:
+        - Dashboard / UI
+        - Camera streaming
+        - Sensors
+        - Hardware telemetry
+        - UART (USB serial)
+        - Bluetooth
+        - TCP console
+        - Embedded web server / API
+        - Flashlight
+        - Build / Gradle
+        - Documentation
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Other approaches, workarounds, or apps that do this.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, sketches, or examples that help explain the request.
