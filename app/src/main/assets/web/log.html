@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard Logger</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
+        input, textarea { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { padding: 10px 20px; background: #007AFF; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    </style>
+    <script>
+        function sendLog() {
+            const id = document.getElementById('moduleId').value;
+            const text = document.getElementById('message').value;
+            fetch('/api/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id, text: text })
+            }).then(() => alert('Sent!'));
+        }
+    </script>
+</head>
+<body>
+    <h1>Update Dashboard Module</h1>
+    <input type="text" id="moduleId" placeholder="Module ID (e.g., logs)">
+    <textarea id="message" rows="4" placeholder="Enter message..."></textarea>
+    <button onclick="sendLog()">Update Dashboard</button>
+</body>
+</html>

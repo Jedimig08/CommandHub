@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{sensorName}}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: 'Courier New', monospace; background: #000; color: #0f0; padding: 40px; }
+        #data { font-size: 2em; margin-top: 20px; }
+    </style>
+    <script>
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(protocol + '//' + window.location.host + '/sensors-ws/{{sensorType}}');
+            ws.onmessage = (e) => {
+                document.getElementById('data').innerText = e.data;
+            };
+        }
+        window.onload = connect;
+    </script>
+</head>
+<body>
+    <h1>Sensor: {{sensorName}}</h1>
+    <p>{{sensorVendor}}</p>
+    <div id="data">Waiting for data...</div>
+    <br><a href="/sensors" style="color: #007AFF; text-decoration: none;">&larr; Back to Hub</a>
+</body>
+</html>

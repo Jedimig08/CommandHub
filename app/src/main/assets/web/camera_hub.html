@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera Hub</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; padding: 40px; background: #f4f4f9; color: #333; }
+        .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        .status { padding: 10px; border-radius: 4px; font-weight: bold; margin-bottom: 10px; }
+        h1, h2, h3 { margin-top: 0; }
+    </style>
+</head>
+<body>
+    <h1>Camera Hub</h1>
+    <p>Device: {{device}}</p>
+
+    <div class="card">
+        <h2>Available Cameras</h2>
+        <table>
+            <thead><tr><th>ID</th><th>Facing</th><th>Type</th><th>Action</th></tr></thead>
+            <tbody>{{cameraRows}}</tbody>
+        </table>
+    </div>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera {{cameraId}}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; text-align: center; }
+        .header { padding: 20px; background: #111; display: {{headerDisplay}}; }
+        canvas { max-width: 100%; height: auto; border: 2px solid #333; margin-top: {{canvasMarginTop}}; }
+        .nav { padding: 10px; }
+        .res-picker { padding: 10px; background: rgba(34,34,34,0.8); position: {{pickerPosition}}; top: 0; width: 100%; z-index: 100; }
+        .picker-group { margin: 4px 0; }
+        a { color: #007AFF; text-decoration: none; margin: 0 10px; }
+        button { background: #444; color: white; border: 1px solid #666; padding: 5px 10px; margin: 2px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #555; }
+        .min-toggle { position: fixed; bottom: 10px; right: 10px; opacity: 0.3; }
+        .min-toggle:hover { opacity: 1.0; }
+        .header, .res-picker { transition: opacity 0.5s ease-in-out; }
+        .header:hover, .res-picker:hover { opacity: 1 !important; }
+    </style>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        let currentRes = urlParams.get('res') || '{{initialRes}}';
+        let currentFps = urlParams.get('fps') || '{{initialFps}}';
+        let currentQuality = urlParams.get('quality') || '{{initialQuality}}';
+        let mode = 'h264';
+        let idleTimer;
+        let reconnectTimer = null;
+        let cameraWs = null;
+        let h264Decoder = null;
+
+        function resetIdleTimer() {
+            const header = document.querySelector('.header');
+            const picker = document.querySelector('.res-picker');
+            if (header) header.style.opacity = '1';
+            if (picker) picker.style.opacity = '1';
+
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => {
+                if (header) header.style.opacity = '0';
+                if (picker) picker.style.opacity = '0';
+            }, 3000);
+        }
+
+        function debouncedConnect() {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(() => {
+                if (mode === 'h264') connectH264Ws();
+                else connectCameraWs();
+            }, 100);
+        }
+
+        function switchMode(m) {
+            mode = m;
+            document.getElementById('btnH264').style.background = m === 'h264' ? '#34C759' : '#444';
+            document.getElementById('btnJpeg').style.background = m === 'jpeg' ? '#34C759' : '#444';
+            debouncedConnect();
+        }
+
+        function connectH264Ws() {
+            if (cameraWs) { try { cameraWs.close(); } catch(e){} }
+            if (typeof VideoDecoder === 'undefined') {
+                switchMode('jpeg');
+                return;
+            }
+
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas ? canvas.getContext('2d') : null;
+
+            if (h264Decoder) { try { h264Decoder.close(); } catch(e){} }
+            try {
+                h264Decoder = new VideoDecoder({
+                    output: (frame) => {
+                        if (canvas && ctx) {
+                            if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
+                                canvas.width = frame.displayWidth;
+                                canvas.height = frame.displayHeight;
+                            }
+                            ctx.drawImage(frame, 0, 0);
+                        }
+                        frame.close();
+                    },
+                    error: (e) => {
+                        console.error('H264 decode error:', e);
+                        switchMode('jpeg');
+                    }
+                });
+                h264Decoder.configure({ codec: 'avc1.42E01E', optimizeForLatency: true });
+            } catch (e) {
+                switchMode('jpeg');
+                return;
+            }
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = protocol + '//' + window.location.host + '/h264-ws/{{cameraId}}?res=' + currentRes + '&fps=' + currentFps;
+            cameraWs = new WebSocket(wsUrl);
+            cameraWs.binaryType = 'arraybuffer';
+
+            cameraWs.onmessage = function(event) {
+                if (h264Decoder && h264Decoder.state === 'configured') {
+                    try {
+                        const chunk = new EncodedVideoChunk({
+                            type: 'key',
+                            timestamp: performance.now() * 1000,
+                            data: event.data
+                        });
+                        h264Decoder.decode(chunk);
+                    } catch(e) {}
+                }
+            };
+
+            cameraWs.onerror = function() {
+                switchMode('jpeg');
+            };
+        }
+
+        function connectCameraWs() {
+            if (cameraWs) { try { cameraWs.close(); } catch(e){} }
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = protocol + '//' + window.location.host + '/camera-ws/{{cameraId}}?res=' + currentRes + '&fps=' + currentFps + '&quality=' + currentQuality;
+            cameraWs = new WebSocket(wsUrl);
+            cameraWs.binaryType = 'arraybuffer';
+
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas ? canvas.getContext('2d') : null;
+
+            cameraWs.onmessage = async function(event) {
+                try {
+                    const blob = new Blob([event.data], { type: 'image/jpeg' });
+                    const bitmap = await createImageBitmap(blob);
+                    if (canvas && ctx) {
+                        if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
+                            canvas.width = bitmap.width;
+                            canvas.height = bitmap.height;
+                        }
+                        ctx.drawImage(bitmap, 0, 0);
+                    }
+                    bitmap.close();
+                } catch(e) {}
+            };
+        }
+
+        function changeRes(res) {
+            if (currentRes === res) return;
+            currentRes = res;
+            debouncedConnect();
+        }
+        function changeFps(fps) {
+            if (currentFps == fps) return;
+            currentFps = fps;
+            debouncedConnect();
+        }
+        function changeQuality(q) {
+            if (currentQuality == q) return;
+            currentQuality = q;
+            debouncedConnect();
+        }
+        async function toggleFlashlight() {
+            try {
+                const res = await fetch('/api/flashlight/toggle', { method: 'POST' });
+                const data = await res.json();
+                const btn = document.getElementById('flashBtn');
+                if (btn) btn.style.background = data.enabled ? '#34C759' : '#FF9500';
+            } catch (e) {}
+        }
+        async function checkFlashlight() {
+            try {
+                const res = await fetch('/api/flashlight');
+                const data = await res.json();
+                const btn = document.getElementById('flashBtn');
+                if (btn) btn.style.background = data.enabled ? '#34C759' : '#FF9500';
+            } catch (e) {}
+        }
+        window.onload = () => {
+            connectH264Ws();
+            checkFlashlight();
+            resetIdleTimer();
+            document.addEventListener('mousemove', resetIdleTimer);
+            document.addEventListener('touchstart', resetIdleTimer);
+            document.addEventListener('click', resetIdleTimer);
+        };
+    </script>
+</head>
+<body>
+    <div class="header">
+        <h1>Camera {{cameraId}} Stream</h1>
+        <div class="nav">
+            <a href="/camera">&larr; Back to Hub</a> | {{otherCamerasLinks}}
+        </div>
+    </div>
+    <div class="res-picker">
+        <div class="picker-group">
+            <strong>Streaming Mode:</strong>
+            <button id="btnH264" onclick="switchMode('h264')" style="background:#34C759;">Hardware H.264 (WebCodecs)</button>
+            <button id="btnJpeg" onclick="switchMode('jpeg')">WebSocket JPEG</button>
+        </div>
+        <div class="picker-group">
+            <strong>Resolutions:</strong> {{resOptions}}
+        </div>
+        <div class="picker-group">
+            <strong>Frame Rate (FPS):</strong> {{fpsOptions}}
+        </div>
+        <div class="picker-group">
+            <strong>JPEG Quality:</strong> {{qualityOptions}}
+        </div>
+        <div class="picker-group">
+            <strong>Flashlight:</strong> <button id="flashBtn" onclick="toggleFlashlight()" style="background:#FF9500;">Toggle Flashlight</button>
+        </div>
+    </div>
+    <canvas id="canvas"></canvas>
+    <div class="min-toggle">
+        <a href="?minimal={{toggleMinimal}}" style="color:white; font-size:10px;">[Toggle UI]</a>
+    </div>
+</body>
+</html>
