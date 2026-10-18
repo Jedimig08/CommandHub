@@ -18,13 +18,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 private fun isValidBluetoothInput(text: String): Boolean {
-    return text.isNotBlank() && text.length <= 200 && !text.startsWith("__")
+    return (text.isNotBlank()) && (text.length <= 200) && (!text.startsWith("__"))
 }
 
 fun Route.configureBluetoothRoutes(
     assetLoader: WebAssetLoader,
     bluetoothManager: BluetoothClassicManager,
-    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit
+    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
 ) {
     register("/bluetooth", "Bluetooth Terminal") {
         val devices = bluetoothManager.getPairedDevices()
@@ -57,9 +57,9 @@ fun Route.configureBluetoothRoutes(
                 title = "Bluetooth Control",
                 wsEndpoint = "/bluetooth-ws",
                 sendEndpoint = "/bluetooth-send",
-                extraControls = controls
+                extraControls = controls,
             ),
-            ContentType.Text.Html
+            ContentType.Text.Html,
         )
     }
 

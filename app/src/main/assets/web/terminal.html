@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{title}}</title>
     <style>
         body {
             font-family: 'Courier New', monospace;
@@ -232,8 +234,8 @@
                 row.className = 'macro-edit-row';
                 row.style.alignItems = 'center';
                 row.innerHTML =
-                    '<input type="text" value="' + escapeHtml(m.label || '') + '" placeholder="Label" style="width:25%; font-weight:bold;" onchange="updateMacro(' + idx + ', \'label\', this.value)">' +
-                    '<textarea placeholder="Command / Multi-line payload (supports \\n)" style="flex:1; height:42px; background:#111; color:#0f0; border:1px solid #444; font-family:monospace; padding:6px; border-radius:4px; resize:vertical;" onchange="updateMacro(' + idx + ', \'cmd\', this.value)">' + escapeHtml(m.cmd || '') + '</textarea>';
+                    '<input type="text" aria-label="Macro label" value="' + escapeHtml(m.label || '') + '" placeholder="Label" style="width:25%; font-weight:bold;" onchange="updateMacro(' + idx + ', \'label\', this.value)">' +
+                    '<textarea aria-label="Macro command" placeholder="Command / Multi-line payload (supports \\n)" style="flex:1; height:42px; background:#111; color:#0f0; border:1px solid #444; font-family:monospace; padding:6px; border-radius:4px; resize:vertical;" onchange="updateMacro(' + idx + ', \'cmd\', this.value)">' + escapeHtml(m.cmd || '') + '</textarea>';
                 editorList.appendChild(row);
             });
         }
@@ -290,6 +292,7 @@
         <input
             type="text"
             id="input"
+            aria-label="Enter command"
             placeholder="Enter command..."
             style="flex:1;"
             onkeydown="if(event.key==='Enter') send()">

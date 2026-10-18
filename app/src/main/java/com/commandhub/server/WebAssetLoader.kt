@@ -23,7 +23,7 @@ class WebAssetLoader(private val context: Context) {
         title: String,
         wsEndpoint: String,
         sendEndpoint: String,
-        extraControls: String = ""
+        extraControls: String = "",
     ): String {
         return load(
             assetName = "terminal.html",
@@ -31,8 +31,8 @@ class WebAssetLoader(private val context: Context) {
                 "title" to title,
                 "wsEndpoint" to wsEndpoint,
                 "sendEndpoint" to sendEndpoint,
-                "extraControls" to extraControls
-            )
+                "extraControls" to extraControls,
+            ),
         )
     }
 }

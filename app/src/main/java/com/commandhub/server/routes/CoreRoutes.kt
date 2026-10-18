@@ -17,7 +17,7 @@ fun Route.configureCoreRoutes(
     layoutProvider: () -> String,
     onLogReceived: (String, String) -> Unit,
     registeredEndpoints: List<Pair<String, String>>,
-    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit
+    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
 ) {
     register("/layout", "Layout Config (JSON)") {
         call.respondText(layoutProvider(), ContentType.Application.Json)

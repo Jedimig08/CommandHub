@@ -20,16 +20,16 @@ import kotlinx.coroutines.launch
 fun Route.configureUartRoutes(
     assetLoader: WebAssetLoader,
     uartManager: UartManager,
-    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit
+    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
 ) {
     register("/uart", "UART Terminal") {
         call.respondText(
             assetLoader.loadTerminalPage(
                 title = "UART Control",
                 wsEndpoint = "/uart-ws",
-                sendEndpoint = "/uart-send"
+                sendEndpoint = "/uart-send",
             ),
-            ContentType.Text.Html
+            ContentType.Text.Html,
         )
     }
 

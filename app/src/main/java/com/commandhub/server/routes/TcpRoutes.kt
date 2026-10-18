@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 fun Route.configureTcpRoutes(
     assetLoader: WebAssetLoader,
     tcpManager: TcpManager,
-    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit
+    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
 ) {
     register("/tcp", "TCP Console") {
         val controls = """
@@ -48,9 +48,9 @@ fun Route.configureTcpRoutes(
                 title = "TCP Console",
                 wsEndpoint = "/tcp-ws",
                 sendEndpoint = "/tcp-send",
-                extraControls = controls
+                extraControls = controls,
             ),
-            ContentType.Text.Html
+            ContentType.Text.Html,
         )
     }
 

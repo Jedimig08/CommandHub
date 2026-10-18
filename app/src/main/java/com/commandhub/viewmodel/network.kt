@@ -150,7 +150,7 @@ class DashboardServer(
             nsdManager?.registerService(
                 serviceInfo,
                 NsdManager.PROTOCOL_DNS_SD,
-                registrationListener
+                registrationListener,
             )
         } catch (e: Exception) {
             e.printStackTrace()

@@ -17,7 +17,7 @@ import kotlinx.serialization.json.Json
 fun Route.configureSensorRoutes(
     assetLoader: WebAssetLoader,
     sensorManager: SensorManager,
-    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit
+    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
 ) {
     register("/sensors", "Sensors Hub") {
         val sensors = sensorManager.getAvailableSensors()
@@ -45,8 +45,8 @@ fun Route.configureSensorRoutes(
             mapOf(
                 "sensorName" to (info?.name ?: "Unknown Sensor"),
                 "sensorVendor" to (info?.vendor ?: ""),
-                "sensorType" to sensorType.toString()
-            )
+                "sensorType" to sensorType.toString(),
+            ),
         )
         call.respondText(html, ContentType.Text.Html)
     }

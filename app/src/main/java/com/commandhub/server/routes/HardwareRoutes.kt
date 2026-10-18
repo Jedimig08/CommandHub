@@ -12,7 +12,7 @@ import io.ktor.server.routing.get
 fun Route.configureHardwareRoutes(
     assetLoader: WebAssetLoader,
     hardwareManager: HardwareManager,
-    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit
+    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
 ) {
     register("/hardware", "Hardware Telemetry") {
         val html = assetLoader.load("hardware.html")

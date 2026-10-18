@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Dashboard Logger</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
@@ -22,8 +23,8 @@
 </head>
 <body>
     <h1>Update Dashboard Module</h1>
-    <input type="text" id="moduleId" placeholder="Module ID (e.g., logs)">
-    <textarea id="message" rows="4" placeholder="Enter message..."></textarea>
+    <input type="text" id="moduleId" aria-label="Module ID" placeholder="Module ID (e.g., logs)">
+    <textarea id="message" aria-label="Enter message" rows="4" placeholder="Enter message..."></textarea>
     <button onclick="sendLog()">Update Dashboard</button>
 </body>
 </html>

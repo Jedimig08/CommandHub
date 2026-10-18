@@ -41,17 +41,20 @@ private suspend fun ByteWriteChannel.streamCamera(flow: Flow<ByteArray>, boundar
 fun Route.configureCameraRoutes(
     assetLoader: WebAssetLoader,
     cameraManager: CameraManager,
-    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit
+    register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
 ) {
     register("/camera", "Camera Dashboard") {
         if (!cameraManager.isReady()) {
-            call.respondText("""
+            call.respondText(
+                """
                 <html><head><script>setTimeout(() => location.reload(), 2000);</script></head>
                 <body style="font-family:sans-serif; text-align:center; padding-top:100px;">
                     <h1>Camera system loading...</h1>
                     <p>Initializing CameraX provider. Please wait.</p>
                 </body></html>
-            """.trimIndent(), ContentType.Text.Html)
+                """.trimIndent(),
+                ContentType.Text.Html,
+            )
             return@register
         }
 
@@ -77,7 +80,7 @@ fun Route.configureCameraRoutes(
 
         val html = assetLoader.load(
             "camera_hub.html",
-            mapOf("device" to device, "cameraRows" to cameraRows)
+            mapOf("device" to device, "cameraRows" to cameraRows),
         )
         call.respondText(html, ContentType.Text.Html)
     }
@@ -123,8 +126,8 @@ fun Route.configureCameraRoutes(
                 "resOptions" to resOptions,
                 "fpsOptions" to fpsOptions,
                 "qualityOptions" to qualityOptions,
-                "toggleMinimal" to (!isMinimal).toString()
-            )
+                "toggleMinimal" to (!isMinimal).toString(),
+            ),
         )
         call.respondText(html, ContentType.Text.Html)
     }
@@ -142,13 +145,13 @@ fun Route.configureCameraRoutes(
 
         cameraManager.getH264SpsPps()?.let { spsPps ->
             try {
-                send(Frame.Binary(true, spsPps))
+                send(Frame.Binary(fin = true, data = spsPps))
             } catch (_: Exception) {}
         }
 
         try {
             flow.conflate().collect { nalBytes ->
-                send(Frame.Binary(true, nalBytes))
+                send(Frame.Binary(fin = true, data = nalBytes))
             }
         } catch (_: Exception) {
             // Disconnected
@@ -167,7 +170,7 @@ fun Route.configureCameraRoutes(
         val flow = cameraManager.getFlow(cameraId, width, height, fpsParam, qualityParam)
         try {
             flow.conflate().collect { jpegBytes ->
-                send(Frame.Binary(true, jpegBytes))
+                send(Frame.Binary(fin = true, data = jpegBytes))
             }
         } catch (_: Exception) {
             // Disconnected

@@ -9,7 +9,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 
 fun Route.configureFlashlightRoutes(
-    cameraManager: CameraManager
+    cameraManager: CameraManager,
 ) {
     get("/api/flashlight") {
         call.respond(mapOf("enabled" to cameraManager.isFlashlightOn()))
