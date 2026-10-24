@@ -1,5 +1,7 @@
 package com.commandhub
 
+import com.commandhub.data.LayoutConfig
+import com.commandhub.data.Widget
 import com.commandhub.viewmodel.CameraStats
 import com.commandhub.viewmodel.HardwareTelemetry
 import com.commandhub.viewmodel.ImuData
@@ -100,5 +102,18 @@ class CommandHubUnitTest {
         assertEquals(1, decoded.type)
         assertEquals(3, decoded.values.size)
         assertEquals(9.8f, decoded.values[1], 0.01f)
+    }
+
+    @Test
+    fun testLayoutConfigSerialization() {
+        val widget = Widget(id = 0, type = "LOG", spanX = 2, aspRatio = 1.5)
+        val config = LayoutConfig(columns = 4, presets = mapOf("preset1" to listOf(widget)))
+
+        val jsonString = Json.encodeToString(config)
+        val decoded = Json.decodeFromString<LayoutConfig>(jsonString)
+
+        assertEquals(4, decoded.columns)
+        assertEquals(1, decoded.presets["preset1"]?.size)
+        assertEquals("LOG", decoded.presets["preset1"]?.first()?.type)
     }
 }

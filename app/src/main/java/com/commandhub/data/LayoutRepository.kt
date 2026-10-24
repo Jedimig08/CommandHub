@@ -62,10 +62,16 @@ class LayoutRepository(private val context: Context) {
         }
     }
 
-    /** Save LayoutConfig back to internal storage */
+    /** Save LayoutConfig back to internal storage atomically */
     fun saveLayout(layout: LayoutConfig) {
         val jsonString = json.encodeToString(layout)
-        file.writeText(jsonString)
+        val tempFile = File(context.filesDir, "layout.json.tmp")
+        tempFile.writeText(jsonString)
+        if (tempFile.exists()) {
+            if (!tempFile.renameTo(file)) {
+                file.writeText(jsonString)
+            }
+        }
     }
 
 }
