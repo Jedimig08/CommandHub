@@ -30,6 +30,7 @@ data class HardwareTelemetry(
     val isCharging: Boolean = false,
     val chargingSource: String = "Unknown",
     val thermalStatus: String = "Normal",
+    val isOverheating: Boolean = false,
     val cpuUsagePct: Float = 0f,
     val ramUsedMb: Long = 0L,
     val ramTotalMb: Long = 0L,
@@ -125,6 +126,8 @@ class HardwareManager(private val context: Context) {
             // CPU Usage calculation from /proc/stat
             val cpuUsage = readCpuUsage()
 
+            val isOverheating = tempCelsius >= 42.0f || thermalStatusStr in listOf("Moderate", "Severe", "Critical", "Emergency", "Shutdown")
+
             _telemetryFlow.value = HardwareTelemetry(
                 batteryLevelPct = level,
                 batteryTempCelsius = tempCelsius,
@@ -134,6 +137,7 @@ class HardwareManager(private val context: Context) {
                 isCharging = isCharging,
                 chargingSource = chargingSource,
                 thermalStatus = thermalStatusStr,
+                isOverheating = isOverheating,
                 cpuUsagePct = cpuUsage,
                 ramUsedMb = ramUsedMb,
                 ramTotalMb = ramTotalMb,

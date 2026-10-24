@@ -67,8 +67,16 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
         )
     }
 
+    var currentBaudRate: Int = 115200
+        private set
+    var rxBytesCount: Long = 0L
+        private set
+    var txBytesCount: Long = 0L
+        private set
+
     fun connect(baudRate: Int = 115200): String {
         disconnect() // Clean up any existing connection first
+        currentBaudRate = baudRate
         val availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
         if (availableDrivers.isEmpty()) return "No USB devices found"
 
@@ -94,7 +102,7 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
             ioManager = manager
             manager.start()
 
-            "Connected to ${driver.device.deviceName}"
+            "Connected to ${driver.device.deviceName} @ $baudRate baud"
         } catch (e: Exception) {
             Log.e("UART", "Connection failed", e)
             "Connection failed: ${e.message}"
@@ -103,8 +111,9 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
 
     fun send(data: String) {
         try {
-            // Adding newline as suggested for ESP32 parsing
-            serialPort?.write((data + "\n").toByteArray(Charsets.UTF_8), 2000)
+            val bytes = (data + "\n").toByteArray(Charsets.UTF_8)
+            serialPort?.write(bytes, 2000)
+            txBytesCount += bytes.size
         } catch (e: Exception) {
             Log.e("UART", "Write failed", e)
         }
@@ -121,8 +130,12 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
 
     override fun onNewData(data: ByteArray?) {
         data?.let {
+            rxBytesCount += it.size
             val message = it.toString(Charsets.UTF_8)
             synchronized(bufferLock) {
+                if (incomingBuffer.length > 100_000) {
+                    incomingBuffer.delete(0, 50_000)
+                }
                 incomingBuffer.append(message)
             }
             _dataFlow.tryEmit(message)

@@ -7,13 +7,20 @@
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: sans-serif; text-align: center; }
         .header { padding: 20px; background: #111; display: {{headerDisplay}}; }
+        .canvas-container { position: relative; display: inline-block; max-width: 100%; }
         canvas { max-width: 100%; height: auto; border: 2px solid #333; margin-top: {{canvasMarginTop}}; }
+        .stats-hud {
+            position: absolute; top: 15px; left: 15px; background: rgba(0, 0, 0, 0.7);
+            color: #00FF66; font-family: monospace; font-size: 12px; padding: 6px 12px;
+            border-radius: 6px; text-align: left; pointer-events: none; border: 1px solid rgba(0, 255, 102, 0.3);
+        }
         .nav { padding: 10px; }
-        .res-picker { padding: 10px; background: rgba(34,34,34,0.8); position: {{pickerPosition}}; top: 0; width: 100%; z-index: 100; }
-        .picker-group { margin: 4px 0; }
+        .res-picker { padding: 10px; background: rgba(34,34,34,0.85); position: {{pickerPosition}}; top: 0; width: 100%; z-index: 100; }
+        .picker-group { margin: 6px 0; }
         a { color: #007AFF; text-decoration: none; margin: 0 10px; }
         button { background: #444; color: white; border: 1px solid #666; padding: 5px 10px; margin: 2px; border-radius: 4px; cursor: pointer; }
         button:hover { background: #555; }
+        input[type=range] { vertical-align: middle; width: 140px; margin: 0 5px; }
         .min-toggle { position: fixed; bottom: 10px; right: 10px; opacity: 0.3; }
         .min-toggle:hover { opacity: 1.0; }
         .header, .res-picker { transition: opacity 0.5s ease-in-out; }
@@ -29,6 +36,7 @@
         let reconnectTimer = null;
         let cameraWs = null;
         let h264Decoder = null;
+        let statsInterval = null;
 
         function resetIdleTimer() {
             const header = document.querySelector('.header');
@@ -156,6 +164,18 @@
             currentQuality = q;
             debouncedConnect();
         }
+        async function updateZoom(val) {
+            document.getElementById('zoomVal').innerText = val + 'x';
+            try {
+                await fetch('/api/camera/control?zoom=' + val, { method: 'POST' });
+            } catch (e) {}
+        }
+        async function updateExposure(val) {
+            document.getElementById('expVal').innerText = val;
+            try {
+                await fetch('/api/camera/control?exposure=' + val, { method: 'POST' });
+            } catch (e) {}
+        }
         async function toggleFlashlight() {
             try {
                 const res = await fetch('/api/flashlight/toggle', { method: 'POST' });
@@ -164,21 +184,44 @@
                 if (btn) btn.style.background = data.enabled ? '#34C759' : '#FF9500';
             } catch (e) {}
         }
-        async function checkFlashlight() {
+        async function fetchCameraStats() {
             try {
-                const res = await fetch('/api/flashlight');
-                const data = await res.json();
-                const btn = document.getElementById('flashBtn');
-                if (btn) btn.style.background = data.enabled ? '#34C759' : '#FF9500';
+                const res = await fetch('/api/camera/stats');
+                const stats = await res.json();
+                const mbps = ((stats.bitrateBps || 0) / 1000000).toFixed(2);
+                document.getElementById('hudText').innerHTML =
+                    'FPS: ' + (stats.currentFps || 0).toFixed(1) + ' / ' + (stats.targetFps || 30) +
+                    '<br>BITRATE: ' + mbps + ' Mbps' +
+                    '<br>DROPPED: ' + (stats.totalFramesDropped || 0) +
+                    '<br>VIEWERS: ' + (stats.activeViewers || 0) +
+                    '<br>RES: ' + (stats.resolution || currentRes);
+
+                // Update sliders bounds if initial
+                const zoomSlider = document.getElementById('zoomSlider');
+                if (zoomSlider && stats.minZoomRatio && stats.maxZoomRatio) {
+                    zoomSlider.min = stats.minZoomRatio;
+                    zoomSlider.max = stats.maxZoomRatio;
+                    zoomSlider.step = '0.1';
+                }
+                const expSlider = document.getElementById('expSlider');
+                if (expSlider && stats.minExposureIndex !== undefined) {
+                    expSlider.min = stats.minExposureIndex;
+                    expSlider.max = stats.maxExposureIndex;
+                }
             } catch (e) {}
         }
+
         window.onload = () => {
             connectH264Ws();
-            checkFlashlight();
             resetIdleTimer();
+            fetchCameraStats();
+            statsInterval = setInterval(fetchCameraStats, 1000);
             document.addEventListener('mousemove', resetIdleTimer);
             document.addEventListener('touchstart', resetIdleTimer);
             document.addEventListener('click', resetIdleTimer);
+        };
+        window.onunload = () => {
+            if (statsInterval) clearInterval(statsInterval);
         };
     </script>
 </head>
@@ -203,13 +246,16 @@
             <strong>Frame Rate (FPS):</strong> {{fpsOptions}}
         </div>
         <div class="picker-group">
-            <strong>JPEG Quality:</strong> {{qualityOptions}}
-        </div>
-        <div class="picker-group">
-            <strong>Flashlight:</strong> <button id="flashBtn" onclick="toggleFlashlight()" style="background:#FF9500;">Toggle Flashlight</button>
+            <strong>Controls:</strong>
+            Zoom: <input type="range" id="zoomSlider" min="1" max="5" value="1" step="0.1" oninput="updateZoom(this.value)"> <span id="zoomVal">1x</span> |
+            Exposure: <input type="range" id="expSlider" min="-2" max="2" value="0" step="1" oninput="updateExposure(this.value)"> <span id="expVal">0</span> |
+            <button id="flashBtn" onclick="toggleFlashlight()" style="background:#FF9500;">Flashlight</button>
         </div>
     </div>
-    <canvas id="canvas"></canvas>
+    <div class="canvas-container">
+        <canvas id="canvas"></canvas>
+        <div class="stats-hud" id="hudText">FPS: --<br>BITRATE: -- Mbps<br>DROPPED: --<br>VIEWERS: --</div>
+    </div>
     <div class="min-toggle">
         <a href="?minimal={{toggleMinimal}}" style="color:white; font-size:10px;">[Toggle UI]</a>
     </div>

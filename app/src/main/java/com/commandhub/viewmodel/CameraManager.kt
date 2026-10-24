@@ -43,6 +43,26 @@ import kotlinx.serialization.Serializable
 import java.util.concurrent.atomic.AtomicReference
 
 @Serializable
+data class CameraStats(
+    val activeCameraId: String? = null,
+    val resolution: String? = null,
+    val targetFps: Int = 0,
+    val currentFps: Float = 0f,
+    val totalFramesCaptured: Long = 0L,
+    val totalFramesDropped: Long = 0L,
+    val totalBytesStreamed: Long = 0L,
+    val bitrateBps: Long = 0L,
+    val activeViewers: Int = 0,
+    val zoomRatio: Float = 1.0f,
+    val minZoomRatio: Float = 1.0f,
+    val maxZoomRatio: Float = 1.0f,
+    val exposureIndex: Int = 0,
+    val minExposureIndex: Int = 0,
+    val maxExposureIndex: Int = 0,
+    val torchEnabled: Boolean = false,
+)
+
+@Serializable
 data class Resolution(val width: Int, val height: Int) {
     override fun toString(): String = "${width}x$height"
 }
@@ -77,6 +97,89 @@ class CameraManager(private val context: Context) {
     private var lastFrameTimeMs: Long = 0L
     private var boundCamera: Camera? = null
     private var isFlashlightOn = false
+
+    private var totalFramesCaptured = 0L
+    private var totalFramesDropped = 0L
+    private var totalBytesStreamed = 0L
+    private var lastFpsCalcTime = SystemClock.elapsedRealtime()
+    private var framesInLastWindow = 0
+    private var bytesInLastWindow = 0L
+    private var currentCalculatedFps = 0f
+    private var currentCalculatedBitrate = 0L
+
+    fun recordFrameProcessed(bytes: Int) {
+        totalFramesCaptured++
+        totalBytesStreamed += bytes
+        framesInLastWindow++
+        bytesInLastWindow += bytes
+
+        val now = SystemClock.elapsedRealtime()
+        val dt = now - lastFpsCalcTime
+        if (dt >= 1000L) {
+            currentCalculatedFps = (framesInLastWindow * 1000f) / dt
+            currentCalculatedBitrate = (bytesInLastWindow * 8 * 1000L) / dt
+            framesInLastWindow = 0
+            bytesInLastWindow = 0L
+            lastFpsCalcTime = now
+        }
+    }
+
+    fun recordFrameDropped() {
+        totalFramesDropped++
+    }
+
+    fun setZoomRatio(ratio: Float): Boolean {
+        return try {
+            val camera = boundCamera ?: return false
+            val zoomState = camera.cameraInfo.zoomState.value ?: return false
+            val clampedRatio = ratio.coerceIn(zoomState.minZoomRatio, zoomState.maxZoomRatio)
+            camera.cameraControl.setZoomRatio(clampedRatio)
+            true
+        } catch (e: Exception) {
+            Log.w("CameraManager", "Failed to set zoom ratio", e)
+            false
+        }
+    }
+
+    fun setExposureCompensation(index: Int): Boolean {
+        return try {
+            val camera = boundCamera ?: return false
+            val exposureState = camera.cameraInfo.exposureState
+            if (!exposureState.isExposureCompensationSupported) return false
+            val clamped = index.coerceIn(exposureState.exposureCompensationRange.lower, exposureState.exposureCompensationRange.upper)
+            camera.cameraControl.setExposureCompensationIndex(clamped)
+            true
+        } catch (e: Exception) {
+            Log.w("CameraManager", "Failed to set exposure compensation", e)
+            false
+        }
+    }
+
+    fun getCameraStats(): CameraStats {
+        val zoom = boundCamera?.cameraInfo?.zoomState?.value
+        val exposure = boundCamera?.cameraInfo?.exposureState
+        val totalViewers = cameraFlows.values.sumOf { it.subscriptionCount.value } +
+                h264Flows.values.sumOf { it.subscriptionCount.value }
+
+        return CameraStats(
+            activeCameraId = activeCameraId,
+            resolution = activeResolution?.toString(),
+            targetFps = activeFps,
+            currentFps = currentCalculatedFps,
+            totalFramesCaptured = totalFramesCaptured,
+            totalFramesDropped = totalFramesDropped,
+            totalBytesStreamed = totalBytesStreamed,
+            bitrateBps = currentCalculatedBitrate,
+            activeViewers = totalViewers,
+            zoomRatio = zoom?.zoomRatio ?: 1f,
+            minZoomRatio = zoom?.minZoomRatio ?: 1f,
+            maxZoomRatio = zoom?.maxZoomRatio ?: 1f,
+            exposureIndex = exposure?.exposureCompensationIndex ?: 0,
+            minExposureIndex = exposure?.exposureCompensationRange?.lower ?: 0,
+            maxExposureIndex = exposure?.exposureCompensationRange?.upper ?: 0,
+            torchEnabled = isFlashlightOn,
+        )
+    }
 
     fun setFlashlight(enabled: Boolean) {
         isFlashlightOn = enabled
@@ -381,6 +484,7 @@ class CameraManager(private val context: Context) {
 
             if (encoding.getAndSet(true)) {
                 recycledNv21Buffer.set(nv21)
+                recordFrameDropped()
                 return // encoder busy -> drop this frame without updating lastFrameTimeMs
             }
 
@@ -393,7 +497,9 @@ class CameraManager(private val context: Context) {
                     val yuv = YuvImage(nv21Buf, ImageFormat.NV21, imgW, imgH, null)
                     encodeOutputStream.reset()
                     yuv.compressToJpeg(Rect(0, 0, cropW, cropH), jpegQuality, encodeOutputStream)
-                    flow.tryEmit(encodeOutputStream.toByteArray())
+                    val bytes = encodeOutputStream.toByteArray()
+                    recordFrameProcessed(bytes.size)
+                    flow.tryEmit(bytes)
                 } catch (e: Exception) {
                     Log.e("CameraManager", "Encoding error", e)
                 } finally {
@@ -592,6 +698,7 @@ class CameraManager(private val context: Context) {
 
             if (encoding.getAndSet(true)) {
                 recycledNv21Buffer.set(nv21)
+                recordFrameDropped()
                 return
             }
 
@@ -601,7 +708,9 @@ class CameraManager(private val context: Context) {
 
             encodeExecutor.execute {
                 try {
-                    encoder.encodeNv21(nv21Buf, ptsUs)
+                    encoder.encodeNv21(nv21Buf, ptsUs) { bytesSent ->
+                        recordFrameProcessed(bytesSent)
+                    }
                 } catch (e: Exception) {
                     Log.e("CameraManager", "H264 Encoding error", e)
                 } finally {
@@ -640,6 +749,16 @@ class HardwareH264Encoder(
     private var mediaCodec: MediaCodec? = null
     @Volatile private var isRunning = false
     private var spsPpsData: ByteArray? = null
+    private var nv12Buffer: ByteArray? = null
+
+    private fun getOrAllocateNv12(size: Int): ByteArray {
+        var buf = nv12Buffer
+        if (buf == null || buf.size != size) {
+            buf = ByteArray(size)
+            nv12Buffer = buf
+        }
+        return buf
+    }
 
     fun getSpsPps(): ByteArray? = spsPpsData
 
@@ -665,7 +784,7 @@ class HardwareH264Encoder(
         }
     }
 
-    fun encodeNv21(nv21: ByteArray, ptsUs: Long) {
+    fun encodeNv21(nv21: ByteArray, ptsUs: Long, onBytesEncoded: ((Int) -> Unit)? = null) {
         val codec = mediaCodec ?: return
         if (!isRunning) return
 
@@ -699,6 +818,7 @@ class HardwareH264Encoder(
                         spsPpsData = outData
                         onOutputNal(outData, true)
                     } else {
+                        onBytesEncoded?.invoke(outData.size)
                         onOutputNal(outData, isKeyFrame)
                     }
                 }
@@ -724,7 +844,7 @@ class HardwareH264Encoder(
 
     private fun nv21ToNv12(nv21: ByteArray, width: Int, height: Int): ByteArray {
         val size = width * height
-        val nv12 = ByteArray(nv21.size)
+        val nv12 = getOrAllocateNv12(nv21.size)
         System.arraycopy(nv21, 0, nv12, 0, minOf(size, nv21.size))
         var i = size
         val maxLen = nv21.size - 1

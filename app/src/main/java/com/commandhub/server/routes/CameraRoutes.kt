@@ -10,6 +10,7 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.websocket.webSocket
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
@@ -198,5 +199,30 @@ fun Route.configureCameraRoutes(
         } else {
             call.respond(cameraManager.getCameraInfos())
         }
+    }
+
+    get("/api/camera/stats") {
+        call.respond(cameraManager.getCameraStats())
+    }
+
+    post("/api/camera/control") {
+        val params = call.request.queryParameters
+        val zoom = params["zoom"]?.toFloatOrNull()
+        val exposure = params["exposure"]?.toIntOrNull()
+        val torch = params["torch"]?.toBooleanStrictOrNull()
+
+        var updated = false
+        if (zoom != null) {
+            updated = cameraManager.setZoomRatio(zoom) || updated
+        }
+        if (exposure != null) {
+            updated = cameraManager.setExposureCompensation(exposure) || updated
+        }
+        if (torch != null) {
+            cameraManager.setFlashlight(torch)
+            updated = true
+        }
+
+        call.respond(mapOf("success" to updated, "stats" to cameraManager.getCameraStats()))
     }
 }

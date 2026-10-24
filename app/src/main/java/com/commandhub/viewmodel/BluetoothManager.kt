@@ -80,6 +80,9 @@ class BluetoothClassicManager(context: Context) {
                         val message = String(buffer, 0, bytes, Charsets.UTF_8)
                         Log.d("BT_SPEED", "RX from ESP32: $message")
                         synchronized(bufferLock) {
+                            if (incomingBuffer.length > 100_000) {
+                                incomingBuffer.delete(0, 50_000)
+                            }
                             incomingBuffer.append(message)
                         }
                         _dataFlow.tryEmit(message)
