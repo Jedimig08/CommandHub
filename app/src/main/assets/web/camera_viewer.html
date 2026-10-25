@@ -31,7 +31,7 @@
         let currentRes = urlParams.get('res') || '{{initialRes}}';
         let currentFps = urlParams.get('fps') || '{{initialFps}}';
         let currentQuality = urlParams.get('quality') || '{{initialQuality}}';
-        let mode = 'jpeg';
+        let isGrayscale = false;
         let idleTimer;
         let reconnectTimer = null;
         let cameraWs = null;
@@ -57,10 +57,17 @@
             }, 100);
         }
 
+        function toggleGrayscale(gray) {
+            isGrayscale = gray;
+            document.getElementById('btnColor').style.background = !gray ? '#34C759' : '#444';
+            document.getElementById('btnGray').style.background = gray ? '#34C759' : '#444';
+            debouncedConnect();
+        }
+
         function connectCameraWs() {
             if (cameraWs) { try { cameraWs.close(); } catch(e){} }
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = protocol + '//' + window.location.host + '/camera-ws/{{cameraId}}?res=' + currentRes + '&fps=' + currentFps + '&quality=' + currentQuality;
+            const wsUrl = protocol + '//' + window.location.host + '/camera-ws/{{cameraId}}?res=' + currentRes + '&fps=' + currentFps + '&quality=' + currentQuality + '&grayscale=' + isGrayscale;
             cameraWs = new WebSocket(wsUrl);
             cameraWs.binaryType = 'arraybuffer';
 
@@ -172,6 +179,14 @@
         </div>
         <div class="picker-group">
             <strong>Frame Rate (FPS):</strong> {{fpsOptions}}
+        </div>
+        <div class="picker-group">
+            <strong>JPEG Quality:</strong> {{qualityOptions}}
+        </div>
+        <div class="picker-group">
+            <strong>Color Mode:</strong>
+            <button id="btnColor" onclick="toggleGrayscale(false)" style="background:#34C759;">Color</button>
+            <button id="btnGray" onclick="toggleGrayscale(true)">Grayscale</button>
         </div>
         <div class="picker-group">
             <strong>Controls:</strong>

@@ -164,11 +164,12 @@ fun Route.configureCameraRoutes(
         val resParam = call.request.queryParameters["res"] ?: "640x480"
         val fpsParam = call.request.queryParameters["fps"]?.toIntOrNull() ?: 30
         val qualityParam = call.request.queryParameters["quality"]?.toIntOrNull() ?: 50
+        val grayscaleParam = call.request.queryParameters["grayscale"]?.toBooleanStrictOrNull() ?: false
         val parts = resParam.split("x")
         val width = parts.getOrNull(0)?.toIntOrNull() ?: 640
         val height = parts.getOrNull(1)?.toIntOrNull() ?: 480
 
-        val flow = cameraManager.getFlow(cameraId, width, height, fpsParam, qualityParam)
+        val flow = cameraManager.getFlow(cameraId, width, height, fpsParam, qualityParam, grayscaleParam)
         try {
             flow.conflate().collect { jpegBytes ->
                 send(Frame.Binary(fin = true, data = jpegBytes))
@@ -183,13 +184,14 @@ fun Route.configureCameraRoutes(
         val resParam = call.request.queryParameters["res"] ?: "640x480"
         val fpsParam = call.request.queryParameters["fps"]?.toIntOrNull() ?: 30
         val qualityParam = call.request.queryParameters["quality"]?.toIntOrNull() ?: 50
+        val grayscaleParam = call.request.queryParameters["grayscale"]?.toBooleanStrictOrNull() ?: false
         val parts = resParam.split("x")
         val width = parts.getOrNull(0)?.toIntOrNull() ?: 640
         val height = parts.getOrNull(1)?.toIntOrNull() ?: 480
 
         val boundary = "frame"
         call.respondBytesWriter(contentType = ContentType.parse("multipart/x-mixed-replace; boundary=$boundary")) {
-            streamCamera(cameraManager.getFlow(cameraId, width, height, fpsParam, qualityParam), boundary)
+            streamCamera(cameraManager.getFlow(cameraId, width, height, fpsParam, qualityParam, grayscaleParam), boundary)
         }
     }
 

@@ -40,6 +40,7 @@ import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.core.Camera
 
 import kotlinx.serialization.Serializable
+import java.util.Arrays
 import java.util.concurrent.atomic.AtomicReference
 
 @Serializable
@@ -237,10 +238,11 @@ class CameraManager(private val context: Context) {
         width: Int = 640,
         height: Int = 480,
         fps: Int = 30,
-        quality: Int = 50
+        quality: Int = 50,
+        grayscale: Boolean = false
     ): SharedFlow<ByteArray> {
         cameraFlows.entries.removeAll { (_, f) -> f.subscriptionCount.value == 0 }
-        val flowKey = "$cameraId:$width:$height:$fps:$quality"
+        val flowKey = "$cameraId:$width:$height:$fps:$quality:$grayscale"
         val flow = cameraFlows.getOrPut(flowKey) {
             MutableSharedFlow(
                 replay = 0,
@@ -252,7 +254,7 @@ class CameraManager(private val context: Context) {
         mainHandler.post {
             lastLifecycleOwner?.let { owner ->
                 if ((activeCameraId != cameraId) || (activeResolution?.width != width) || (activeResolution?.height != height) || (activeFps != fps)) {
-                    startCamera(owner, cameraId, width, height, fps, quality)
+                    startCamera(owner, cameraId, width, height, fps, quality, grayscale)
                 }
             }
         }
@@ -267,7 +269,8 @@ class CameraManager(private val context: Context) {
         width: Int = 640,
         height: Int = 480,
         fps: Int = 30,
-        quality: Int = 50
+        quality: Int = 50,
+        grayscale: Boolean = false
     ) {
         if (boundCamera != null && activeCameraId == cameraId && activeResolution?.width == width && activeResolution?.height == height && activeFps == fps && lastLifecycleOwner == lifecycleOwner) {
             return
@@ -284,7 +287,7 @@ class CameraManager(private val context: Context) {
         // Stop everything else first to avoid conflicts - ensures only ONE camera/res/fps is active
         provider.unbindAll()
 
-        val flowKey = "$cameraId:$width:$height:$fps:$quality"
+        val flowKey = "$cameraId:$width:$height:$fps:$quality:$grayscale"
         val flow = cameraFlows.getOrPut(flowKey) {
             MutableSharedFlow(replay = 0, extraBufferCapacity = 2, onBufferOverflow = BufferOverflow.DROP_OLDEST)
         }
@@ -316,7 +319,7 @@ class CameraManager(private val context: Context) {
 
         val analysis = builder.build()
         analysis.setAnalyzer(cameraExecutor) { image ->
-            processImage(image, flow, width, height, fps, quality)
+            processImage(image, flow, width, height, fps, quality, grayscale)
         }
 
         val selector = CameraSelector.Builder()
@@ -408,7 +411,8 @@ class CameraManager(private val context: Context) {
         targetWidth: Int,
         targetHeight: Int,
         targetFps: Int,
-        quality: Int = 50
+        quality: Int = 30,
+        grayscale: Boolean = false
     ) {
         try {
             if (flow.subscriptionCount.value == 0) {
@@ -458,23 +462,27 @@ class CameraManager(private val context: Context) {
                 }
             }
 
-            // Copy UV planes interleaving V then U for NV21
-            val uvHeight = imgH / 2
-            val uvWidth = imgW / 2
-
-            if (uvPixelStride == 2 && uvRowStride == imgW && vBuffer.remaining() >= uvHeight * uvRowStride - 1) {
-                vBuffer.get(nv21, nv21Offset, uvHeight * uvRowStride - 1)
-                if (vBuffer.remaining() > 0) {
-                    nv21[requiredNv21Size - 1] = uBuffer.get(uBuffer.limit() - 1)
-                }
+            if (grayscale) {
+                Arrays.fill(nv21, nv21Offset, requiredNv21Size, 128.toByte())
             } else {
-                for (row in 0 until uvHeight) {
-                    val rowStart = row * uvRowStride
-                    for (col in 0 until uvWidth) {
-                        val vIndex = rowStart + col * uvPixelStride
-                        val uIndex = rowStart + col * uvPixelStride
-                        nv21[nv21Offset++] = vBuffer.get(vIndex)
-                        nv21[nv21Offset++] = uBuffer.get(uIndex)
+                // Copy UV planes interleaving V then U for NV21
+                val uvHeight = imgH / 2
+                val uvWidth = imgW / 2
+
+                if (uvPixelStride == 2 && uvRowStride == imgW && vBuffer.remaining() >= uvHeight * uvRowStride - 1) {
+                    vBuffer.get(nv21, nv21Offset, uvHeight * uvRowStride - 1)
+                    if (vBuffer.remaining() > 0) {
+                        nv21[requiredNv21Size - 1] = uBuffer.get(uBuffer.limit() - 1)
+                    }
+                } else {
+                    for (row in 0 until uvHeight) {
+                        val rowStart = row * uvRowStride
+                        for (col in 0 until uvWidth) {
+                            val vIndex = rowStart + col * uvPixelStride
+                            val uIndex = rowStart + col * uvPixelStride
+                            nv21[nv21Offset++] = vBuffer.get(vIndex)
+                            nv21[nv21Offset++] = uBuffer.get(uIndex)
+                        }
                     }
                 }
             }
