@@ -33,7 +33,7 @@ fun Route.configureBluetoothRoutes(
         }
 
         val controls = """
-            <select id="device">
+            <select id="device" aria-label="Bluetooth Device Selector">
                 $deviceOptions
             </select>
 

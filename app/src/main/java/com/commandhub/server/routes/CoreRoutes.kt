@@ -11,14 +11,50 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class ProcessingUrlRequest(val url: String = "")
 
 fun Route.configureCoreRoutes(
     assetLoader: WebAssetLoader,
     layoutProvider: () -> String,
+    getProcessingUrl: () -> String = { "" },
+    setProcessingUrl: (String) -> Unit = {},
+    publishDomain: () -> Unit = {},
+    setKeepScreenOnEnabled: (Boolean) -> Unit = {},
     onLogReceived: (String, String) -> Unit,
     registeredEndpoints: List<Pair<String, String>>,
     register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
 ) {
+    get("/api/settings/processing-url") {
+        call.respond(mapOf("url" to getProcessingUrl()))
+    }
+
+    post("/api/settings/processing-url") {
+        try {
+            val req = runCatching { call.receive<ProcessingUrlRequest>() }.getOrNull()
+            val urlStr = req?.url?.ifEmpty { null } ?: call.request.queryParameters["url"] ?: ""
+            if (urlStr.isNotEmpty()) {
+                setProcessingUrl(urlStr)
+            }
+            call.respond(mapOf("status" to "ok", "url" to getProcessingUrl()))
+        } catch (_: Exception) {
+            call.respond(mapOf("status" to "ok", "url" to getProcessingUrl()))
+        }
+    }
+
+    post("/api/settings/publish-domain") {
+        publishDomain()
+        call.respond(mapOf("status" to "published"))
+    }
+
+    post("/api/settings/screen-on") {
+        val enabled = call.request.queryParameters["enabled"]?.toBooleanStrictOrNull() ?: true
+        setKeepScreenOnEnabled(enabled)
+        call.respond(mapOf("status" to "ok", "enabled" to enabled))
+    }
+
     register("/layout", "Layout Config (JSON)") {
         call.respondText(layoutProvider(), ContentType.Application.Json)
     }

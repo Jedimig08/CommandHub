@@ -190,8 +190,8 @@
         </div>
         <div class="picker-group">
             <strong>Controls:</strong>
-            Zoom: <input type="range" id="zoomSlider" min="1" max="5" value="1" step="0.1" oninput="updateZoom(this.value)"> <span id="zoomVal">1x</span> |
-            Exposure: <input type="range" id="expSlider" min="-2" max="2" value="0" step="1" oninput="updateExposure(this.value)"> <span id="expVal">0</span> |
+            Zoom: <input type="range" id="zoomSlider" aria-label="Zoom Ratio" min="1" max="5" value="1" step="0.1" oninput="updateZoom(this.value)"> <span id="zoomVal">1x</span> |
+            Exposure: <input type="range" id="expSlider" aria-label="Exposure Compensation" min="-2" max="2" value="0" step="1" oninput="updateExposure(this.value)"> <span id="expVal">0</span> |
             <button id="flashBtn" onclick="toggleFlashlight()" style="background:#FF9500;">Flashlight</button>
         </div>
     </div>

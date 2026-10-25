@@ -26,8 +26,8 @@ fun Route.configureTcpRoutes(
 ) {
     register("/tcp", "TCP Console") {
         val controls = """
-            <input type="text" id="ip" placeholder="IP Address" style="width: 50%;">
-            <input type="number" id="port" placeholder="Port" value="8888" style="width: 20%;">
+            <input type="text" id="ip" aria-label="IP Address" placeholder="IP Address" style="width: 50%;">
+            <input type="number" id="port" aria-label="Port" placeholder="Port" value="8888" style="width: 20%;">
             <button onclick="
                 const ip = document.getElementById('ip').value;
                 const port = document.getElementById('port').value;

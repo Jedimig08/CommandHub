@@ -45,6 +45,10 @@ class DashboardServer(
     private val context: Context,
     private val port: Int = 8080,
     private val layoutProvider: () -> String,
+    private val getProcessingUrl: () -> String = { "" },
+    private val setProcessingUrl: (String) -> Unit = {},
+    private val publishDomain: () -> Unit = {},
+    private val setKeepScreenOnEnabled: (Boolean) -> Unit = {},
     private val uartManager: UartManager,
     private val bluetoothManager: BluetoothClassicManager,
     private val cameraManager: CameraManager,
@@ -105,7 +109,17 @@ class DashboardServer(
                     get(path) { body() }
                 }
 
-                configureCoreRoutes(webAssetLoader, layoutProvider, onLogReceived, registeredEndpoints, ::register)
+                configureCoreRoutes(
+                    assetLoader = webAssetLoader,
+                    layoutProvider = layoutProvider,
+                    getProcessingUrl = getProcessingUrl,
+                    setProcessingUrl = setProcessingUrl,
+                    publishDomain = publishDomain,
+                    setKeepScreenOnEnabled = setKeepScreenOnEnabled,
+                    onLogReceived = onLogReceived,
+                    registeredEndpoints = registeredEndpoints,
+                    register = ::register,
+                )
                 configureBluetoothRoutes(webAssetLoader, bluetoothManager, ::register)
                 configureTcpRoutes(webAssetLoader, tcpManager, ::register)
                 configureUartRoutes(webAssetLoader, uartManager, ::register)

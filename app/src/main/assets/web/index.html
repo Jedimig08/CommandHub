@@ -14,7 +14,8 @@
         a { color: #f8fafc; text-decoration: none; font-weight: 600; display: block; font-size: 1.1rem; }
         .icon { font-size: 2rem; margin-bottom: 10px; display: block; }
         .section { margin-top: 30px; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
-        button { padding: 8px 14px; border-radius: 6px; border: 1px solid #475569; background: #0284c7; color: white; font-size: 0.95rem; cursor: pointer; font-weight: bold; }
+        input, button { padding: 10px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: white; font-size: 1rem; }
+        button { background: #0284c7; cursor: pointer; font-weight: bold; }
         button:hover { background: #0369a1; }
         .setting-row { display: flex; justify-content: space-between; align-items: center; margin: 12px 0; padding-bottom: 10px; border-bottom: 1px solid #334155; }
     </style>
@@ -26,12 +27,47 @@
     </div>
 
     <div class="grid">
-        <div class="card"><a href="/camera"><span class="icon">📷</span>Camera Stream</a></div>
-        <div class="card"><a href="/sensors"><span class="icon">🧭</span>Sensors Hub</a></div>
-        <div class="card"><a href="/hardware"><span class="icon">⚡</span>Hardware & Power</a></div>
-        <div class="card"><a href="/uart"><span class="icon">🔌</span>UART / Serial</a></div>
-        <div class="card"><a href="/bluetooth"><span class="icon">🦷</span>Bluetooth SPP</a></div>
-        <div class="card"><a href="/tcp"><span class="icon">🌐</span>TCP Console</a></div>
+        <div class="card">
+            <!--suppress HtmlUnknownTarget -->
+            <a href="/camera"><span class="icon">📷</span>Camera Stream</a>
+        </div>
+        <div class="card">
+            <!--suppress HtmlUnknownTarget -->
+            <a href="/sensors"><span class="icon">🧭</span>Sensors Hub</a>
+        </div>
+        <div class="card">
+            <!--suppress HtmlUnknownTarget -->
+            <a href="/hardware"><span class="icon">⚡</span>Hardware & Power</a>
+        </div>
+        <div class="card">
+            <!--suppress HtmlUnknownTarget -->
+            <a href="/uart"><span class="icon">🔌</span>UART / Serial</a>
+        </div>
+        <div class="card">
+            <!--suppress HtmlUnknownTarget -->
+            <a href="/bluetooth"><span class="icon">🦷</span>Bluetooth SPP</a>
+        </div>
+        <div class="card">
+            <!--suppress HtmlUnknownTarget -->
+            <a href="/tcp"><span class="icon">🌐</span>TCP Console</a>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>🚀 Linux Processing UI Launcher</h3>
+        <p style="font-size:0.9rem; color:#94a3b8;">Enter the web URL of your Linux / Termux processing server (e.g. Flask, Streamlit, Gradio, Node.js):</p>
+        <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+            <input type="text" id="procUrl" aria-label="Processing Server URL" placeholder="http://192.168.1.100:5000/ or http://127.0.0.1:5000/" style="flex: 1; min-width: 220px;">
+            <button onclick="
+                const u = document.getElementById('procUrl').value;
+                if (!u) return alert('Please enter a URL');
+                fetch('/api/settings/processing-url', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url: u})
+                }).then(() => window.location.href = u);
+            ">Launch Processing UI</button>
+        </div>
     </div>
 
     <div class="section">
@@ -45,17 +81,6 @@
             ">Toggle Torch</button>
         </div>
         <div class="setting-row">
-            <span>Keep Screen On</span>
-            <button onclick="alert('Keep Screen On active')">Active</button>
-        </div>
-        <div class="setting-row">
-            <span>High-Speed Sensors</span>
-            <button onclick="
-                fetch('/api/sensors', {method: 'GET'})
-                .then(() => alert('Sensor delay refreshed'));
-            ">Toggle Mode</button>
-        </div>
-        <div class="setting-row">
             <span>mDNS Domain Publication</span>
             <button onclick="
                 fetch('/', {method: 'GET'})
@@ -63,5 +88,11 @@
             ">Publish Domain</button>
         </div>
     </div>
+
+    <script>
+        fetch('/api/settings/processing-url')
+            .then(r => r.json())
+            .then(d => { if (d.url) document.getElementById('procUrl').value = d.url; });
+    </script>
 </body>
 </html>

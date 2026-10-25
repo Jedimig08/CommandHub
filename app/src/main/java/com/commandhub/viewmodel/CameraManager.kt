@@ -399,14 +399,6 @@ class CameraManager(private val context: Context) {
         return result.distinctBy { it.id }
     }
 
-    @Suppress("Unused")
-    fun startSupportedCameras(lifecycleOwner: LifecycleOwner) {
-        lastLifecycleOwner = lifecycleOwner
-        getCameraInfos().firstOrNull { it.facing == "Back" && !it.id.contains(":") }?.let {
-            startCamera(lifecycleOwner, it.id)
-        }
-    }
-
     fun getDeviceName(): String = "${Build.MANUFACTURER} ${Build.MODEL}"
 
     private fun processImage(
