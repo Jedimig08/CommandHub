@@ -2,6 +2,7 @@ package com.commandhub.viewmodel
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Log
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
@@ -94,42 +95,46 @@ class DashboardServer(
             e.printStackTrace()
         }
 
-        server = embeddedServer(CIO, port = port, host = "0.0.0.0") {
-            install(ContentNegotiation) { json() }
-            install(WebSockets) {
-                pingPeriod = 20.seconds
-                timeout = 40.seconds
-                maxFrameSize = Long.MAX_VALUE
-                masking = false
-            }
-
-            routing {
-                fun register(path: String, name: String, body: suspend RoutingContext.() -> Unit) {
-                    registeredEndpoints.add(path to name)
-                    get(path) { body() }
+        try {
+            server = embeddedServer(CIO, port = port, host = "0.0.0.0") {
+                install(ContentNegotiation) { json() }
+                install(WebSockets) {
+                    pingPeriod = 20.seconds
+                    timeout = 40.seconds
+                    maxFrameSize = Long.MAX_VALUE
+                    masking = false
                 }
 
-                configureCoreRoutes(
-                    assetLoader = webAssetLoader,
-                    layoutProvider = layoutProvider,
-                    getProcessingUrl = getProcessingUrl,
-                    setProcessingUrl = setProcessingUrl,
-                    publishDomain = publishDomain,
-                    setKeepScreenOnEnabled = setKeepScreenOnEnabled,
-                    onLogReceived = onLogReceived,
-                    registeredEndpoints = registeredEndpoints,
-                    register = ::register,
-                )
-                configureBluetoothRoutes(webAssetLoader, bluetoothManager, ::register)
-                configureTcpRoutes(webAssetLoader, tcpManager, ::register)
-                configureUartRoutes(webAssetLoader, uartManager, ::register)
-                configureCameraRoutes(webAssetLoader, cameraManager, ::register)
-                configureSensorRoutes(webAssetLoader, sensorManager, ::register)
-                configureHardwareRoutes(webAssetLoader, hardwareManager, ::register)
-                configureFlashlightRoutes(cameraManager)
-            }
-        }.start(wait = false)
-        registerService(port)
+                routing {
+                    fun register(path: String, name: String, body: suspend RoutingContext.() -> Unit) {
+                        registeredEndpoints.add(path to name)
+                        get(path) { body() }
+                    }
+
+                    configureCoreRoutes(
+                        assetLoader = webAssetLoader,
+                        layoutProvider = layoutProvider,
+                        getProcessingUrl = getProcessingUrl,
+                        setProcessingUrl = setProcessingUrl,
+                        publishDomain = publishDomain,
+                        setKeepScreenOnEnabled = setKeepScreenOnEnabled,
+                        onLogReceived = onLogReceived,
+                        registeredEndpoints = registeredEndpoints,
+                        register = ::register,
+                    )
+                    configureBluetoothRoutes(webAssetLoader, bluetoothManager, ::register)
+                    configureTcpRoutes(webAssetLoader, tcpManager, ::register)
+                    configureUartRoutes(webAssetLoader, uartManager, ::register)
+                    configureCameraRoutes(webAssetLoader, cameraManager, ::register)
+                    configureSensorRoutes(webAssetLoader, sensorManager, ::register)
+                    configureHardwareRoutes(webAssetLoader, hardwareManager, ::register)
+                    configureFlashlightRoutes(cameraManager)
+                }
+            }.start(wait = false)
+            registerService(port)
+        } catch (e: Exception) {
+            Log.e("DashboardServer", "Failed to start Ktor server on port $port", e)
+        }
     }
 
     fun registerService(port: Int = this.port) {
