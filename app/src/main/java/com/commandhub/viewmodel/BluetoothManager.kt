@@ -11,8 +11,6 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.*
 import kotlin.concurrent.thread
-import com.commandhub.hardware.ChannelType
-import com.commandhub.hardware.HardwareDeviceChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -20,11 +18,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 data class PairedDeviceInfo(val name: String, val address: String)
 
 @SuppressLint("MissingPermission")
-class BluetoothClassicManager(context: Context) : HardwareDeviceChannel {
-
-    override val type: ChannelType = ChannelType.BLUETOOTH
-    override val isConnected: Boolean
-        get() = socket != null && socket?.isConnected == true
+class BluetoothClassicManager(context: Context) {
 
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
@@ -36,8 +30,9 @@ class BluetoothClassicManager(context: Context) : HardwareDeviceChannel {
 
     private val sppUuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
+    // Flow for real-time WebSocket push
     private val _dataFlow = MutableSharedFlow<String>(extraBufferCapacity = 100)
-    override val dataFlow: SharedFlow<String> = _dataFlow.asSharedFlow()
+    val dataFlow: SharedFlow<String> = _dataFlow.asSharedFlow()
 
     private val bufferLock = Any()
     private val incomingBuffer = StringBuilder()
@@ -55,11 +50,12 @@ class BluetoothClassicManager(context: Context) : HardwareDeviceChannel {
         }
     }
 
-    override fun connect(target: String): String {
-        val device = bluetoothAdapter?.getRemoteDevice(target) ?: return "Device not found"
+    fun connect(address: String): String {
+        val device = bluetoothAdapter?.getRemoteDevice(address) ?: return "Device not found"
         
         return try {
             disconnect()
+            // Use Insecure socket for lower latency on older hardware
             socket = device.createInsecureRfcommSocketToServiceRecord(sppUuid)
             socket?.connect()
             
@@ -67,7 +63,7 @@ class BluetoothClassicManager(context: Context) : HardwareDeviceChannel {
             inputStream = socket?.inputStream
             
             startReading()
-            "Connected to ${device.name ?: target}"
+            "Connected to ${device.name ?: address}"
         } catch (e: IOException) {
             Log.e("BT_CLASSIC", "Connection failed", e)
             "Connection failed: ${e.message}"
@@ -104,7 +100,7 @@ class BluetoothClassicManager(context: Context) : HardwareDeviceChannel {
         }
     }
 
-    override fun send(data: String) {
+    fun send(data: String) {
         try {
             Log.d("BT_SPEED", "TX to ESP32: $data")
             val bytes = (data + "\n").toByteArray(Charsets.UTF_8)
@@ -124,7 +120,7 @@ class BluetoothClassicManager(context: Context) : HardwareDeviceChannel {
         }
     }
 
-    override fun disconnect() {
+    fun disconnect() {
         isRunning = false
         try {
             inputStream?.close()

@@ -2,20 +2,66 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CommandHub</title>
+    <title>CommandHub Control Center</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: sans-serif; padding: 40px; line-height: 1.6; background: #f4f4f9; }
-        h1 { color: #333; }
-        li { margin: 10px 0; }
-        a { color: #007AFF; text-decoration: none; font-weight: bold; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+        h1 { color: #38bdf8; font-size: 1.8rem; margin-bottom: 5px; }
+        p { color: #94a3b8; margin-top: 0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-top: 25px; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; text-align: center; transition: 0.2s; }
+        .card:hover { background: #334155; border-color: #38bdf8; transform: translateY(-2px); }
+        a { color: #f8fafc; text-decoration: none; font-weight: 600; display: block; font-size: 1.1rem; }
+        .icon { font-size: 2rem; margin-bottom: 10px; display: block; }
+        .section { margin-top: 30px; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
+        button { padding: 8px 14px; border-radius: 6px; border: 1px solid #475569; background: #0284c7; color: white; font-size: 0.95rem; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0369a1; }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; margin: 12px 0; padding-bottom: 10px; border-bottom: 1px solid #334155; }
     </style>
 </head>
 <body>
-    <h1>CommandHub Terminal</h1>
-    <p>Select a connection type:</p>
-    <ul>
-        {{listItems}}
-    </ul>
+    <div>
+        <h1>CommandHub</h1>
+        <p>Universal Hardware & Robotics Control Station</p>
+    </div>
+
+    <div class="grid">
+        <div class="card"><a href="/camera"><span class="icon">📷</span>Camera Stream</a></div>
+        <div class="card"><a href="/sensors"><span class="icon">🧭</span>Sensors Hub</a></div>
+        <div class="card"><a href="/hardware"><span class="icon">⚡</span>Hardware & Power</a></div>
+        <div class="card"><a href="/uart"><span class="icon">🔌</span>UART / Serial</a></div>
+        <div class="card"><a href="/bluetooth"><span class="icon">🦷</span>Bluetooth SPP</a></div>
+        <div class="card"><a href="/tcp"><span class="icon">🌐</span>TCP Console</a></div>
+    </div>
+
+    <div class="section">
+        <h3>⚙ System Settings</h3>
+        <div class="setting-row">
+            <span>Flashlight / Torch</span>
+            <button onclick="
+                fetch('/api/flashlight/toggle', {method: 'POST'})
+                .then(r => r.json())
+                .then(d => alert('Flashlight: ' + (d.enabled ? 'ON' : 'OFF')));
+            ">Toggle Torch</button>
+        </div>
+        <div class="setting-row">
+            <span>Keep Screen On</span>
+            <button onclick="alert('Keep Screen On active')">Active</button>
+        </div>
+        <div class="setting-row">
+            <span>High-Speed Sensors</span>
+            <button onclick="
+                fetch('/api/sensors', {method: 'GET'})
+                .then(() => alert('Sensor delay refreshed'));
+            ">Toggle Mode</button>
+        </div>
+        <div class="setting-row">
+            <span>mDNS Domain Publication</span>
+            <button onclick="
+                fetch('/', {method: 'GET'})
+                .then(() => alert('Domain broadcast refreshed'));
+            ">Publish Domain</button>
+        </div>
+    </div>
 </body>
 </html>

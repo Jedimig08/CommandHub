@@ -31,11 +31,10 @@
         let currentRes = urlParams.get('res') || '{{initialRes}}';
         let currentFps = urlParams.get('fps') || '{{initialFps}}';
         let currentQuality = urlParams.get('quality') || '{{initialQuality}}';
-        let mode = 'h264';
+        let mode = 'jpeg';
         let idleTimer;
         let reconnectTimer = null;
         let cameraWs = null;
-        let h264Decoder = null;
         let statsInterval = null;
 
         function resetIdleTimer() {
@@ -54,73 +53,8 @@
         function debouncedConnect() {
             clearTimeout(reconnectTimer);
             reconnectTimer = setTimeout(() => {
-                if (mode === 'h264') connectH264Ws();
-                else connectCameraWs();
+                connectCameraWs();
             }, 100);
-        }
-
-        function switchMode(m) {
-            mode = m;
-            document.getElementById('btnH264').style.background = m === 'h264' ? '#34C759' : '#444';
-            document.getElementById('btnJpeg').style.background = m === 'jpeg' ? '#34C759' : '#444';
-            debouncedConnect();
-        }
-
-        function connectH264Ws() {
-            if (cameraWs) { try { cameraWs.close(); } catch(e){} }
-            if (typeof VideoDecoder === 'undefined') {
-                switchMode('jpeg');
-                return;
-            }
-
-            const canvas = document.getElementById('canvas');
-            const ctx = canvas ? canvas.getContext('2d') : null;
-
-            if (h264Decoder) { try { h264Decoder.close(); } catch(e){} }
-            try {
-                h264Decoder = new VideoDecoder({
-                    output: (frame) => {
-                        if (canvas && ctx) {
-                            if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
-                                canvas.width = frame.displayWidth;
-                                canvas.height = frame.displayHeight;
-                            }
-                            ctx.drawImage(frame, 0, 0);
-                        }
-                        frame.close();
-                    },
-                    error: (e) => {
-                        console.error('H264 decode error:', e);
-                        switchMode('jpeg');
-                    }
-                });
-                h264Decoder.configure({ codec: 'avc1.42E01E', optimizeForLatency: true });
-            } catch (e) {
-                switchMode('jpeg');
-                return;
-            }
-
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = protocol + '//' + window.location.host + '/h264-ws/{{cameraId}}?res=' + currentRes + '&fps=' + currentFps;
-            cameraWs = new WebSocket(wsUrl);
-            cameraWs.binaryType = 'arraybuffer';
-
-            cameraWs.onmessage = function(event) {
-                if (h264Decoder && h264Decoder.state === 'configured') {
-                    try {
-                        const chunk = new EncodedVideoChunk({
-                            type: 'key',
-                            timestamp: performance.now() * 1000,
-                            data: event.data
-                        });
-                        h264Decoder.decode(chunk);
-                    } catch(e) {}
-                }
-            };
-
-            cameraWs.onerror = function() {
-                switchMode('jpeg');
-            };
         }
 
         function connectCameraWs() {
@@ -196,7 +130,6 @@
                     '<br>VIEWERS: ' + (stats.activeViewers || 0) +
                     '<br>RES: ' + (stats.resolution || currentRes);
 
-                // Update sliders bounds if initial
                 const zoomSlider = document.getElementById('zoomSlider');
                 if (zoomSlider && stats.minZoomRatio && stats.maxZoomRatio) {
                     zoomSlider.min = stats.minZoomRatio;
@@ -212,7 +145,7 @@
         }
 
         window.onload = () => {
-            connectH264Ws();
+            connectCameraWs();
             resetIdleTimer();
             fetchCameraStats();
             statsInterval = setInterval(fetchCameraStats, 1000);
@@ -234,11 +167,6 @@
         </div>
     </div>
     <div class="res-picker">
-        <div class="picker-group">
-            <strong>Streaming Mode:</strong>
-            <button id="btnH264" onclick="switchMode('h264')" style="background:#34C759;">Hardware H.264 (WebCodecs)</button>
-            <button id="btnJpeg" onclick="switchMode('jpeg')">WebSocket JPEG</button>
-        </div>
         <div class="picker-group">
             <strong>Resolutions:</strong> {{resOptions}}
         </div>

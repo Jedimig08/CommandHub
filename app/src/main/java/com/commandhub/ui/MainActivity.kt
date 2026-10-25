@@ -1,15 +1,26 @@
 package com.commandhub.ui
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.view.View
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -19,7 +30,9 @@ import com.commandhub.viewmodel.DashboardViewModel
 class MainActivity : ComponentActivity() {
 
     private val viewModel: DashboardViewModel by viewModels()
+    private var webViewInstance: WebView? = null
 
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -28,8 +41,18 @@ class MainActivity : ComponentActivity() {
         windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
 
-        setContent {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webViewInstance?.canGoBack() == true) {
+                    webViewInstance?.goBack()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
 
+        setContent {
             val launcher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission(),
             ) { _ -> }
@@ -40,10 +63,36 @@ class MainActivity : ComponentActivity() {
                 if (status != PackageManager.PERMISSION_GRANTED) {
                     launcher.launch(Manifest.permission.CAMERA)
                 }
-                viewModel.loadLayout()
             }
 
-            DashboardPager(viewModel = viewModel)
+            AndroidView(
+                factory = { context ->
+                    WebView(context).apply {
+                        setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                        webViewClient = object : WebViewClient() {
+                            override fun onReceivedError(
+                                view: WebView?,
+                                request: WebResourceRequest?,
+                                error: WebResourceError?
+                            ) {
+                                if (request?.isForMainFrame == true) {
+                                    view?.postDelayed({ view.reload() }, 500)
+                                }
+                            }
+                        }
+                        settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+                            allowFileAccess = true
+                            loadsImagesAutomatically = true
+                            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        }
+                        loadUrl("http://127.0.0.1:8080/")
+                        webViewInstance = this
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }

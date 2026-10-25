@@ -12,17 +12,11 @@ import androidx.core.content.ContextCompat
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import com.hoho.android.usbserial.util.SerialInputOutputManager
-import com.commandhub.hardware.ChannelType
-import com.commandhub.hardware.HardwareDeviceChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
-class UartManager(private val context: Context) : SerialInputOutputManager.Listener, HardwareDeviceChannel {
-
-    override val type: ChannelType = ChannelType.UART
-    override val isConnected: Boolean
-        get() = serialPort != null && serialPort?.isOpen == true
+class UartManager(private val context: Context) : SerialInputOutputManager.Listener {
 
     private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
     private var serialPort: UsbSerialPort? = null
@@ -31,7 +25,7 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
     private val actionUsbPermission = "com.android.example.USB_PERMISSION"
 
     private val _dataFlow = MutableSharedFlow<String>(extraBufferCapacity = 100)
-    override val dataFlow: SharedFlow<String> = _dataFlow.asSharedFlow()
+    val dataFlow: SharedFlow<String> = _dataFlow.asSharedFlow()
 
     // Buffer for legacy HTTP polling
     private val bufferLock = Any()
@@ -80,7 +74,7 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
     var txBytesCount: Long = 0L
         private set
 
-    override fun connect(target: String): String {
+    fun connect(target: String): String {
         val baudRate = target.toIntOrNull() ?: currentBaudRate
         return connect(baudRate)
     }
@@ -120,7 +114,7 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
         }
     }
 
-    override fun send(data: String) {
+    fun send(data: String) {
         try {
             val bytes = (data + "\n").toByteArray(Charsets.UTF_8)
             serialPort?.write(bytes, 2000)
@@ -158,7 +152,7 @@ class UartManager(private val context: Context) : SerialInputOutputManager.Liste
         Log.e("UART", "UART Run Error", e)
     }
 
-    override fun disconnect() {
+    fun disconnect() {
         try {
             ioManager?.stop()
             serialPort?.close()

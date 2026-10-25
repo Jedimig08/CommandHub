@@ -1,7 +1,5 @@
 package com.commandhub.viewmodel
 
-import com.commandhub.hardware.ChannelType
-import com.commandhub.hardware.HardwareDeviceChannel
 import android.util.Log
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -11,26 +9,16 @@ import java.io.OutputStream
 import java.net.Socket
 import kotlin.concurrent.thread
 
-class TcpManager : HardwareDeviceChannel {
-
-    override val type: ChannelType = ChannelType.TCP
-    override val isConnected: Boolean
-        get() = socket != null && socket?.isConnected == true && isRunning
+class TcpManager {
 
     private var socket: Socket? = null
     private var outputStream: OutputStream? = null
     private var inputStream: InputStream? = null
     private var isRunning = false
 
+    // Flow for real-time WebSocket push
     private val _dataFlow = MutableSharedFlow<String>(extraBufferCapacity = 100)
-    override val dataFlow: SharedFlow<String> = _dataFlow.asSharedFlow()
-
-    override fun connect(target: String): String {
-        val parts = target.split(":")
-        val ip = parts.getOrNull(0) ?: "127.0.0.1"
-        val port = parts.getOrNull(1)?.toIntOrNull() ?: 8888
-        return connect(ip, port)
-    }
+    val dataFlow: SharedFlow<String> = _dataFlow.asSharedFlow()
 
     fun connect(ip: String, port: Int): String {
         return try {
@@ -81,7 +69,7 @@ class TcpManager : HardwareDeviceChannel {
         }
     }
 
-    override fun send(data: String) {
+    fun send(data: String) {
         thread {
             try {
                 val bytes = (data + "\n").toByteArray(Charsets.UTF_8)
@@ -93,7 +81,7 @@ class TcpManager : HardwareDeviceChannel {
         }
     }
 
-    override fun disconnect() {
+    fun disconnect() {
         isRunning = false
         try {
             inputStream?.close()
