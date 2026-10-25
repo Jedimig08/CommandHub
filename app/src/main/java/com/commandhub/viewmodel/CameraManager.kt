@@ -95,6 +95,8 @@ class CameraManager(private val context: Context) {
     private var activeCameraId: String? = null
     private var activeResolution: Resolution? = null
     private var activeFps: Int = 30
+    private var activeGrayscale: Boolean = false
+    private var activeQuality: Int = 50
     private var lastFrameTimeMs: Long = 0L
     private var boundCamera: Camera? = null
     private var isFlashlightOn = false
@@ -253,7 +255,7 @@ class CameraManager(private val context: Context) {
         
         mainHandler.post {
             lastLifecycleOwner?.let { owner ->
-                if ((activeCameraId != cameraId) || (activeResolution?.width != width) || (activeResolution?.height != height) || (activeFps != fps)) {
+                if ((activeCameraId != cameraId) || (activeResolution?.width != width) || (activeResolution?.height != height) || (activeFps != fps) || (activeGrayscale != grayscale) || (activeQuality != quality)) {
                     startCamera(owner, cameraId, width, height, fps, quality, grayscale)
                 }
             }
@@ -272,7 +274,7 @@ class CameraManager(private val context: Context) {
         quality: Int = 50,
         grayscale: Boolean = false
     ) {
-        if (boundCamera != null && activeCameraId == cameraId && activeResolution?.width == width && activeResolution?.height == height && activeFps == fps && lastLifecycleOwner == lifecycleOwner) {
+        if (boundCamera != null && activeCameraId == cameraId && activeResolution?.width == width && activeResolution?.height == height && activeFps == fps && activeGrayscale == grayscale && activeQuality == quality && lastLifecycleOwner == lifecycleOwner) {
             return
         }
 
@@ -280,6 +282,8 @@ class CameraManager(private val context: Context) {
         activeCameraId = cameraId
         activeResolution = Resolution(width, height)
         activeFps = fps
+        activeGrayscale = grayscale
+        activeQuality = quality
         lastFrameTimeMs = 0L
 
         val provider = cameraProvider ?: return
