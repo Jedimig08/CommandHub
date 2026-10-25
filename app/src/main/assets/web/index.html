@@ -118,9 +118,26 @@
     </div>
 
     <script>
-        fetch('/api/settings/processing-url')
-            .then(r => r.json())
-            .then(d => { if (d.url) document.getElementById('procUrl').value = d.url; });
+        function loadSettings() {
+            fetch('/api/settings/state')
+                .then(r => r.json())
+                .then(d => {
+                    if (d.processingUrl) {
+                        document.getElementById('procUrl').value = d.processingUrl;
+                    }
+                    const screenBtn = document.getElementById('screenBtn');
+                    if (screenBtn) {
+                        screenBtn.innerText = d.screenOn ? 'Screen: AWAKE' : 'Screen: NORMAL';
+                        screenBtn.style.background = d.screenOn ? '#34C759' : '#0284c7';
+                    }
+                    const sensorBtn = document.getElementById('sensorBtn');
+                    if (sensorBtn) {
+                        sensorBtn.innerText = d.sensorFastest ? 'Mode: FASTEST (100Hz)' : 'Mode: UI (Power Saver)';
+                        sensorBtn.style.background = d.sensorFastest ? '#34C759' : '#0284c7';
+                    }
+                });
+        }
+        window.onload = loadSettings;
     </script>
 </body>
 </html>

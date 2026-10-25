@@ -30,6 +30,14 @@ fun Route.configureCoreRoutes(
     registeredEndpoints: List<Pair<String, String>>,
     register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
 ) {
+    get("/api/settings/state") {
+        call.respond(mapOf(
+            "screenOn" to getKeepScreenOn(),
+            "sensorFastest" to getSensorDelayFastest(),
+            "processingUrl" to getProcessingUrl()
+        ))
+    }
+
     get("/api/settings/processing-url") {
         call.respond(mapOf("url" to getProcessingUrl()))
     }
