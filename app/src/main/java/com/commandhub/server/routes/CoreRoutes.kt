@@ -22,7 +22,9 @@ fun Route.configureCoreRoutes(
     getProcessingUrl: () -> String = { "" },
     setProcessingUrl: (String) -> Unit = {},
     publishDomain: () -> Unit = {},
+    getKeepScreenOn: () -> Boolean = { true },
     setKeepScreenOnEnabled: (Boolean) -> Unit = {},
+    getSensorDelayFastest: () -> Boolean = { false },
     updateSensorDelayMode: (Boolean) -> Unit = {},
     onLogReceived: (String, String) -> Unit,
     registeredEndpoints: List<Pair<String, String>>,
@@ -50,16 +52,16 @@ fun Route.configureCoreRoutes(
         call.respond(mapOf("status" to "published"))
     }
 
-    post("/api/settings/screen-on") {
-        val enabled = call.request.queryParameters["enabled"]?.toBooleanStrictOrNull() ?: true
-        setKeepScreenOnEnabled(enabled)
-        call.respond(mapOf("status" to "ok", "enabled" to enabled))
+    post("/api/settings/screen-on/toggle") {
+        val newState = !getKeepScreenOn()
+        setKeepScreenOnEnabled(newState)
+        call.respond(mapOf("status" to "ok", "enabled" to newState))
     }
 
-    post("/api/settings/sensors-speed") {
-        val fastest = call.request.queryParameters["fastest"]?.toBooleanStrictOrNull() ?: true
-        updateSensorDelayMode(fastest)
-        call.respond(mapOf("status" to "ok", "fastest" to fastest))
+    post("/api/settings/sensors-speed/toggle") {
+        val newFastest = !getSensorDelayFastest()
+        updateSensorDelayMode(newFastest)
+        call.respond(mapOf("status" to "ok", "fastest" to newFastest))
     }
 
     register("/layout", "Layout Config (JSON)") {
