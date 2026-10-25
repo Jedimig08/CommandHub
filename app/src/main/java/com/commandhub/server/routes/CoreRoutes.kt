@@ -23,6 +23,7 @@ fun Route.configureCoreRoutes(
     setProcessingUrl: (String) -> Unit = {},
     publishDomain: () -> Unit = {},
     setKeepScreenOnEnabled: (Boolean) -> Unit = {},
+    updateSensorDelayMode: (Boolean) -> Unit = {},
     onLogReceived: (String, String) -> Unit,
     registeredEndpoints: List<Pair<String, String>>,
     register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
@@ -53,6 +54,12 @@ fun Route.configureCoreRoutes(
         val enabled = call.request.queryParameters["enabled"]?.toBooleanStrictOrNull() ?: true
         setKeepScreenOnEnabled(enabled)
         call.respond(mapOf("status" to "ok", "enabled" to enabled))
+    }
+
+    post("/api/settings/sensors-speed") {
+        val fastest = call.request.queryParameters["fastest"]?.toBooleanStrictOrNull() ?: true
+        updateSensorDelayMode(fastest)
+        call.respond(mapOf("status" to "ok", "fastest" to fastest))
     }
 
     register("/layout", "Layout Config (JSON)") {

@@ -29,6 +29,17 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         prefs.edit { putString("processing_ui_url", url) }
     }
 
+    var sensorDelayFastest by mutableStateOf(false)
+        private set
+
+    fun updateSensorDelayMode(fastest: Boolean) {
+        sensorDelayFastest = fastest
+        sensorManager.setSensorDelayMode(
+            if (fastest) android.hardware.SensorManager.SENSOR_DELAY_FASTEST
+            else android.hardware.SensorManager.SENSOR_DELAY_UI,
+        )
+    }
+
     fun setKeepScreenOnEnabled(enabled: Boolean) {
         keepScreenOn = enabled
         prefs.edit { putBoolean("keep_screen_on", enabled) }
@@ -46,6 +57,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         setProcessingUrl = { updateProcessingUiUrl(it) },
         publishDomain = { publishDomain() },
         setKeepScreenOnEnabled = { setKeepScreenOnEnabled(it) },
+        updateSensorDelayMode = { updateSensorDelayMode(it) },
         uartManager = uartManager,
         bluetoothManager = bluetoothManager,
         cameraManager = cameraManager,

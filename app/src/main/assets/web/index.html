@@ -81,9 +81,25 @@
             ">Toggle Torch</button>
         </div>
         <div class="setting-row">
+            <span>Keep Screen Awake</span>
+            <button onclick="
+                fetch('/api/settings/screen-on?enabled=true', {method: 'POST'})
+                .then(r => r.json())
+                .then(d => alert('Keep Screen Awake: Active'));
+            ">Keep Awake</button>
+        </div>
+        <div class="setting-row">
+            <span>High-Speed Sensors (FASTEST Mode)</span>
+            <button onclick="
+                fetch('/api/settings/sensors-speed?fastest=true', {method: 'POST'})
+                .then(r => r.json())
+                .then(d => alert('High-Speed Sensors: FASTEST Mode'));
+            ">FASTEST Mode</button>
+        </div>
+        <div class="setting-row">
             <span>mDNS Domain Publication</span>
             <button onclick="
-                fetch('/', {method: 'GET'})
+                fetch('/api/settings/publish-domain', {method: 'POST'})
                 .then(() => alert('Domain broadcast refreshed'));
             ">Publish Domain</button>
         </div>
