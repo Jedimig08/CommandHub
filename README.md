@@ -282,7 +282,7 @@ Bluetooth   UART     Camera    Sensors   Networking  TCP     Flashlight
 
 | Package            | Responsibility                                                       |
 | ------------------ | -------------------------------------------------------------------- |
-| `ui/`              | Jetpack Compose screens — `MainActivity`, `DashboardPager`, `DashboardPage`, theme |
+| `ui/`              | `MainActivity.kt` hosting the hardware-accelerated `WebView` Control Center interface |
 | `data/`            | Models and `LayoutRepository` for loading/saving dashboard JSON      |
 | `viewmodel/`       | `DashboardViewModel` plus one manager class per hardware subsystem   |
 | `server/`          | Ktor server setup, `WebAssetLoader`, and the `routes/` modules        |
@@ -291,14 +291,7 @@ Bluetooth   UART     Camera    Sensors   Networking  TCP     Flashlight
 
 ### UI
 
-The UI package contains the Jetpack Compose interface used throughout the application.
-Instead of traditional XML layouts, every screen is implemented using Compose. This makes
-the interface reactive and allows dashboard widgets to update automatically when new data
-becomes available.
-
-The dashboard is the central part of the application. Widgets are displayed dynamically
-according to the selected JSON layout, allowing different configurations without
-recompiling the application.
+The UI package contains `MainActivity`, which hosts a hardware-accelerated `WebView` loading the embedded Ktor web server dashboard (`http://127.0.0.1:8080/`). This thin-client web architecture provides infinite modularity and customization, allowing the control center UI to be styled and updated via editable HTML/JS assets without requiring APK rebuilds.
 
 ### Data
 

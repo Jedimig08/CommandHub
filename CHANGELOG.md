@@ -16,6 +16,10 @@ Camera streaming performance and H.264 work that has landed on `main` since the
   delivers SPS/PPS configuration followed by NAL units for WebCodecs decoding.
 - JPEG-over-WebSocket camera streams at `WS /camera-ws/{id}` as a lower-overhead
   alternative to MJPEG.
+- **Grayscale / Monochrome streaming mode** (`grayscale=true`) across camera streams, reducing bandwidth by 33%–50%.
+- **Camera statistics & control endpoints** (`/api/camera/stats`, `/api/camera/control`) for real-time FPS, bitrate tracking, zoom, and exposure adjustments.
+- **Synchronized 9-DOF IMU telemetry** endpoint (`/ws/sensors/imu`) combining accelerometer, gyroscope, magnetometer, and orientation quaternions.
+- **WebView-based Control Center UI** hosting the local Ktor web dashboard directly inside the app with hardware back-navigation support.
 - **`API.md`** — complete HTTP and WebSocket reference: every endpoint, query
   parameter, JSON schema, frame format, and error code.
 - GitHub issue templates, a pull request template, and `SECURITY.md`.
@@ -49,6 +53,7 @@ Camera streaming performance and H.264 work that has landed on `main` since the
 
 ### Removed
 
+- Dead Compose UI dashboard components (`DashboardPage`, `DashboardPager`, `KeepScreenOn`, `ModuleUtils`) in favor of the thin-client WebView interface.
 - `.idea/` IDE files are no longer tracked in version control.
 
 ## [1.2.0] - 2026-10-10
