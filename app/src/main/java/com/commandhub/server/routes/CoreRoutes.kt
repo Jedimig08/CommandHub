@@ -16,6 +16,21 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ProcessingUrlRequest(val url: String = "")
 
+@Serializable
+data class SettingsStateResponse(
+    val screenOn: Boolean,
+    val sensorFastest: Boolean,
+    val processingUrl: String,
+)
+
+@Serializable
+data class SettingsStatusResponse(
+    val status: String = "ok",
+    val enabled: Boolean = false,
+    val fastest: Boolean = false,
+    val url: String = "",
+)
+
 fun Route.configureCoreRoutes(
     assetLoader: WebAssetLoader,
     layoutProvider: () -> String,
@@ -31,15 +46,17 @@ fun Route.configureCoreRoutes(
     register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
 ) {
     get("/api/settings/state") {
-        call.respond(mapOf(
-            "screenOn" to getKeepScreenOn(),
-            "sensorFastest" to getSensorDelayFastest(),
-            "processingUrl" to getProcessingUrl()
-        ))
+        call.respond(
+            SettingsStateResponse(
+                screenOn = getKeepScreenOn(),
+                sensorFastest = getSensorDelayFastest(),
+                processingUrl = getProcessingUrl(),
+            ),
+        )
     }
 
     get("/api/settings/processing-url") {
-        call.respond(mapOf("url" to getProcessingUrl()))
+        call.respond(SettingsStatusResponse(url = getProcessingUrl()))
     }
 
     post("/api/settings/processing-url") {
@@ -49,27 +66,27 @@ fun Route.configureCoreRoutes(
             if (urlStr.isNotEmpty()) {
                 setProcessingUrl(urlStr)
             }
-            call.respond(mapOf("status" to "ok", "url" to getProcessingUrl()))
+            call.respond(SettingsStatusResponse(url = getProcessingUrl()))
         } catch (_: Exception) {
-            call.respond(mapOf("status" to "ok", "url" to getProcessingUrl()))
+            call.respond(SettingsStatusResponse(url = getProcessingUrl()))
         }
     }
 
     post("/api/settings/publish-domain") {
         publishDomain()
-        call.respond(mapOf("status" to "published"))
+        call.respond(SettingsStatusResponse(status = "published"))
     }
 
     post("/api/settings/screen-on/toggle") {
         val newState = !getKeepScreenOn()
         setKeepScreenOnEnabled(newState)
-        call.respond(mapOf("status" to "ok", "enabled" to newState))
+        call.respond(SettingsStatusResponse(enabled = newState))
     }
 
     post("/api/settings/sensors-speed/toggle") {
         val newFastest = !getSensorDelayFastest()
         updateSensorDelayMode(newFastest)
-        call.respond(mapOf("status" to "ok", "fastest" to newFastest))
+        call.respond(SettingsStatusResponse(fastest = newFastest))
     }
 
     register("/layout", "Layout Config (JSON)") {

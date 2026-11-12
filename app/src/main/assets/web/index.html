@@ -82,7 +82,7 @@
                     btn.innerText = d.enabled ? 'Torch: ON' : 'Torch: OFF';
                     btn.style.background = d.enabled ? '#34C759' : '#0284c7';
                 });
-            ">Toggle Torch</button>
+            ">Loading...</button>
         </div>
         <div class="setting-row">
             <span>Keep Screen Awake</span>
@@ -94,7 +94,7 @@
                     btn.innerText = d.enabled ? 'Screen: AWAKE' : 'Screen: NORMAL';
                     btn.style.background = d.enabled ? '#34C759' : '#0284c7';
                 });
-            ">Toggle Awake</button>
+            ">Loading...</button>
         </div>
         <div class="setting-row">
             <span>High-Speed Sensors</span>
@@ -106,7 +106,7 @@
                     btn.innerText = d.fastest ? 'Mode: FASTEST (100Hz)' : 'Mode: UI (Power Saver)';
                     btn.style.background = d.fastest ? '#34C759' : '#0284c7';
                 });
-            ">Toggle Mode</button>
+            ">Loading...</button>
         </div>
         <div class="setting-row">
             <span>mDNS Domain Publication</span>
@@ -134,6 +134,16 @@
                     if (sensorBtn) {
                         sensorBtn.innerText = d.sensorFastest ? 'Mode: FASTEST (100Hz)' : 'Mode: UI (Power Saver)';
                         sensorBtn.style.background = d.sensorFastest ? '#34C759' : '#0284c7';
+                    }
+                });
+
+            fetch('/api/flashlight')
+                .then(r => r.json())
+                .then(d => {
+                    const torchBtn = document.getElementById('torchBtn');
+                    if (torchBtn) {
+                        torchBtn.innerText = d.enabled ? 'Torch: ON' : 'Torch: OFF';
+                        torchBtn.style.background = d.enabled ? '#34C759' : '#0284c7';
                     }
                 });
         }

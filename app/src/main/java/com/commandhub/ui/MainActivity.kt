@@ -67,6 +67,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                LaunchedEffect(viewModel.keepScreenOn) {
+                    if (viewModel.keepScreenOn) {
+                        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    } else {
+                        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                }
+
                 AndroidView(
                     factory = { context ->
                         WebView(context).apply {
