@@ -29,6 +29,7 @@ server** on your local network.
 - [Important Files](#important-files)
 - [Building the Project](#building-the-project)
 - [Challenges](#challenges)
+- [Known Issues & Fix Plan](#known-issues--fix-plan)
 - [Future Improvements](#future-improvements)
 - [What I Learned](#what-i-learned)
 - [AI Usage](#ai-usage)
@@ -468,6 +469,20 @@ On the streaming side, delivering smooth video meant choosing between latency an
 compatibility: MJPEG works everywhere but is heavy on the wire, while hardware H.264 is
 far more efficient but requires WebCodecs and a shared-memory configuration handshake to
 decode in the browser.
+
+## Known Issues & Fix Plan
+
+A full, prioritized list of current problems — with evidence, impact, recommended fixes, and acceptance criteria — lives in **[COMMANDHUB_PROBLEMS_PRIORITY.md](COMMANDHUB_PROBLEMS_PRIORITY.md)**.
+
+The highest-priority items are:
+
+- **Authentication and access control** for the embedded server ([issue #4](https://github.com/Jedimig08/CommandHub/issues/4))
+- **Camera stream freezing after rotation** and missing WebSocket reconnect ([issue #5](https://github.com/Jedimig08/CommandHub/issues/5))
+- **Terminal heartbeat being forwarded to Bluetooth/UART/TCP devices** ([issue #3](https://github.com/Jedimig08/CommandHub/issues/3))
+- **Unavailable hardware modules still appearing in the UI** and camera permission failures affecting other modules ([issue #6](https://github.com/Jedimig08/CommandHub/issues/6))
+- **Microphone streaming not implemented** ([issue #7](https://github.com/Jedimig08/CommandHub/issues/7))
+
+The file also covers the server lifecycle, camera concurrency, input validation, WebView/XSS hardening, documentation drift, and the recommended PR order. Fix critical security issues before adding new features.
 
 ## Future Improvements
 
