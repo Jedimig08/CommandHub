@@ -105,13 +105,15 @@ single device or workflow.
    cd CommandHub
    ```
 
-2. Open the project in **Android Studio Meerkat or newer** and let Gradle sync.
+2. Open the project in **Android Studio Otter 3 Feature Drop (2025.2.3) or newer** and
+   let Gradle sync.
 
 3. **Run on a physical Android device.** Emulators lack the USB, Bluetooth, and camera
    hardware this project is built around, so a real phone is required.
 
-4. Grant the runtime permissions when prompted (camera, nearby devices, location,
-   notification).
+4. Grant the camera permission when prompted. Bluetooth scanning/connection and location
+   permissions are declared in the manifest but are not requested at runtime; grant them
+   from Android Settings if you use Bluetooth Classic.
 
 5. From a computer on the same Wi-Fi network, either:
 
@@ -412,7 +414,7 @@ read in isolation.
 
 ### Requirements
 
-- Android Studio Meerkat or newer
+- Android Studio Otter 3 Feature Drop (2025.2.3) or newer (AGP 9.0.1)
 - Android SDK **36** (`compileSdk` / `targetSdk`; `minSdk` 26)
 - JDK 17+ (Android Studio's bundled JBR works)
 - Kotlin and Gradle are provided by the project's wrapper and version catalog

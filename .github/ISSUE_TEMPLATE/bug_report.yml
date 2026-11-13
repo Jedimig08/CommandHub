@@ -15,7 +15,7 @@ body:
       label: Area
       description: Which part of CommandHub is affected?
       options:
-        - Dashboard / UI
+        - Control Center / UI
         - Camera streaming
         - Sensors
         - Hardware telemetry

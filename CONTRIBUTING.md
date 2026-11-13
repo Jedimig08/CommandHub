@@ -14,7 +14,7 @@ cd CommandHub
 
 Requirements:
 
-- Android Studio Meerkat or newer
+- Android Studio Otter 3 Feature Drop (2025.2.3) or newer (AGP 9.0.1)
 - Android SDK 36 (`minSdk` 26)
 - JDK 17+ to run Gradle (the app compiles with Java 11 source/target compatibility) — if
   `java` is not on your `PATH`, point Gradle at Android Studio's bundled JDK:

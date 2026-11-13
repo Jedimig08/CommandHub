@@ -28,7 +28,7 @@ Tested on Pixel 7, Android 15
 
 - [ ] My code follows the existing Kotlin style and project conventions.
 - [ ] I have commented hard-to-understand logic where needed.
-- [ ] I have updated documentation (`README.md`, `API.md`, `CHANGELOG.md`) if behaviour changed.
+- [ ] I have updated documentation (`README.md`, `API.md`, `CONTRIBUTING.md`, `CHANGELOG.md`) if behaviour or contributor workflow changed.
 - [ ] My commits are scoped and the message explains what changed.
 - [ ] I have not committed generated or IDE files (`.idea/`, `build/`, `local.properties`).
 
