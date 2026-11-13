@@ -208,21 +208,24 @@
 - **Impact:** one viewer disconnecting stops the sensor for all viewers; concurrent access can throw; IMU listeners leak.
 - **Fix:** reference-count listeners per sensor type; protect state with a mutex; stop IMU in `stopAll()` and reset its flag.
 
-## P1-21 — IMU endpoints are documented but not implemented
+## P1-21 — IMU manager code exists but no endpoints are implemented
 
-- **Evidence:** `SensorManager.kt:104-168` contains `getImuFlow()`, but nothing calls it; there is no `/ws/sensors/imu` or `/api/sensors/imu` route. README/API have been corrected; `CHANGELOG.md:21` still claims them.
-- **Impact:** users reading the CHANGELOG expect a feature that does not exist.
-- **Fix:** either register the routes and a client page, or remove the CHANGELOG claim. Prefer implementing and testing the routes since the manager logic already exists.
+- **Evidence:** `SensorManager.kt:104-168` contains `getImuFlow()`, but nothing calls it; there is no `/ws/sensors/imu` or `/api/sensors/imu` route. README, `API.md`, and `CHANGELOG.md` no longer claim the endpoints exist.
+- **Impact:** dead IMU manager code remains, and users may assume IMU support is available.
+- **Fix:** either register the routes and a client page, or remove the dead code. Prefer implementing and testing the routes since the manager logic already exists.
 
 ---
 
 # P2 — Medium: correctness, build, documentation, tests
 
-## P2-01 — README/API/CHANGELOG describe removed or nonexistent features
+## P2-01 — Documentation drift (resolved)
 
-- **Evidence:** README/API were updated to describe the WebView Control Center, current packages, routes, settings, and schemas. `CONTRIBUTING.md` still tells contributors to edit `ui/DashboardPage.kt`; `CHANGELOG.md` still claims IMU endpoints; `README.md:408` still says JDK 17+ while the build uses Java 11.
-- **Impact:** remaining contributor docs are stale and setup expectations differ.
-- **Fix:** update CONTRIBUTING and CHANGELOG; reconcile the JDK target.
+- **Status:** Resolved in the documentation pass.
+- **Evidence:** README, `API.md`, `CONTRIBUTING.md`, and `CHANGELOG.md` now describe the
+  WebView Control Center, current packages/routes/settings/schemas, and the legacy
+  `/layout` route. The false IMU endpoint claim was removed.
+- **Impact:** docs no longer advertise removed features or deleted files.
+- **Fix:** keep docs updated in the same PR as API or behaviour changes.
 
 ## P2-02 — `/api/log` and `/layout` are effectively dead
 
@@ -244,9 +247,11 @@
 
 ## P2-05 — Inconsistent Java/JDK target
 
-- **Evidence:** Java 11 source/target at `app/build.gradle.kts:32-35`; README says JDK 17+ at `README.md:408`; CHANGELOG says JDK 25 at `CHANGELOG.md:78`.
-- **Impact:** confusing setup and possible compiler warnings/failures.
-- **Fix:** pick one target, set `jvmTarget` explicitly, and update docs.
+- **Evidence:** Java 11 source/target at `app/build.gradle.kts:32-35`; README and
+  `CONTRIBUTING.md` now state JDK 17+ for Gradle with Java 11 source/target
+  compatibility; `CHANGELOG.md` no longer claims JDK 25.
+- **Impact:** setup docs are consistent, but `jvmTarget` is still implicit.
+- **Fix:** set `jvmTarget` explicitly (for example, 11) and keep the docs in sync.
 
 ## P2-06 — Release/versioning hygiene
 
@@ -359,7 +364,7 @@ Do not start these until P0 and P1 are complete; they add new attack surface and
 6. **P1-13** — remove PING and fix terminal heartbeat (issue #3).
 7. **P1-08, P1-09, P1-10, P1-20, P1-21** — serialization, NV21, SPS/PPS, sensors, IMU.
 8. **P1-14, P1-16 through P1-19** — permissions, wake lock, shutdown, transport I/O, hardware loop.
-9. **P2-01 through P2-16** — docs, build, CI, tests, and cleanup.
+9. **P2-02 through P2-16** — build, CI, tests, dead-code cleanup, and remaining docs.
 10. **P3-01** — microphone streaming (issue #7), after auth and lifecycle work.
 
 ## Suggested PR sequence

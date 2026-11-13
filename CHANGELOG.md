@@ -13,12 +13,14 @@ Camera streaming performance and H.264 work that has landed on `main` since the
 ### Added
 
 - Hardware **H.264 encoding** (`MediaCodec`) with a `WS /h264-ws/{id}` endpoint that
-  delivers SPS/PPS configuration followed by NAL units for WebCodecs decoding.
+  delivers SPS/PPS configuration followed by NAL units for clients that can decode H.264.
 - JPEG-over-WebSocket camera streams at `WS /camera-ws/{id}` as a lower-overhead
   alternative to MJPEG.
 - **Grayscale / Monochrome streaming mode** (`grayscale=true`) across camera streams, reducing bandwidth by 33%–50%.
 - **Camera statistics & control endpoints** (`/api/camera/stats`, `/api/camera/control`) for real-time FPS, bitrate tracking, zoom, and exposure adjustments.
-- **Synchronized 9-DOF IMU telemetry** endpoint (`/ws/sensors/imu`) combining accelerometer, gyroscope, magnetometer, and orientation quaternions.
+- **Runtime settings API** (`/api/settings/*`) for screen-awake, sensor sampling speed,
+  processing-UI URL, and mDNS republishing, plus the Control Center settings panel.
+- **Linux/Termux processing-UI launcher** with a saved URL and an injected home button.
 - **WebView-based Control Center UI** hosting the local Ktor web dashboard directly inside the app with hardware back-navigation support.
 - **`API.md`** — complete HTTP and WebSocket reference: every endpoint, query
   parameter, JSON schema, frame format, and error code.
@@ -27,12 +29,16 @@ Camera streaming performance and H.264 work that has landed on `main` since the
 
 ### Changed
 
+- The **WebView Control Center** is now the primary UI; Jetpack Compose is limited to the
+  Android shell and theme.
 - Web server routes split out of `network.kt` into eight focused modules under
   `server/routes/`.
 - Inline HTML strings extracted into editable templates under `app/src/main/assets/web/`,
   loaded via `WebAssetLoader` and `{{placeholder}}` substitution.
 - Application package renamed from `com.example.uitest` to `com.commandhub`
   (namespace and `applicationId` updated).
+- README, `API.md`, `CONTRIBUTING.md`, and this changelog aligned with the current
+  WebView UI, routes, settings API, and JSON schemas.
 - README rewritten to match the current architecture; CHANGELOG rebuilt from git
   history to match the released tags.
 
@@ -54,6 +60,8 @@ Camera streaming performance and H.264 work that has landed on `main` since the
 ### Removed
 
 - Dead Compose UI dashboard components (`DashboardPage`, `DashboardPager`, `KeepScreenOn`, `ModuleUtils`) in favor of the thin-client WebView interface.
+- The JSON-driven Compose dashboard, `LayoutRepository`, and `layout.json` usage.
+  `GET /layout` remains as a legacy empty response for older clients.
 - `.idea/` IDE files are no longer tracked in version control.
 
 ## [1.2.0] - 2026-10-10
@@ -75,7 +83,8 @@ Tag: `v1.2.0`
 
 ### Changed
 
-- Project upgraded to JDK 25.
+- Project build tooling updated (current configuration: Java 11 source/target
+  compatibility, JDK 17+ for Gradle).
 
 ## [1.1.0] - 2026-09-03
 
