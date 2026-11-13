@@ -210,9 +210,9 @@
 
 ## P1-21 — IMU endpoints are documented but not implemented
 
-- **Evidence:** `SensorManager.kt:104-168` contains `getImuFlow()`, but nothing calls it; there is no `/ws/sensors/imu` or `/api/sensors/imu` route. `README.md:152-156`, `API.md:143-156`, and `CHANGELOG.md:21` claim them.
-- **Impact:** users and reviewers expect a feature that does not exist.
-- **Fix:** either register the routes and a client page, or remove the claims from the docs. Prefer implementing and testing the routes since the manager logic already exists.
+- **Evidence:** `SensorManager.kt:104-168` contains `getImuFlow()`, but nothing calls it; there is no `/ws/sensors/imu` or `/api/sensors/imu` route. README/API have been corrected; `CHANGELOG.md:21` still claims them.
+- **Impact:** users reading the CHANGELOG expect a feature that does not exist.
+- **Fix:** either register the routes and a client page, or remove the CHANGELOG claim. Prefer implementing and testing the routes since the manager logic already exists.
 
 ---
 
@@ -220,21 +220,21 @@
 
 ## P2-01 — README/API/CHANGELOG describe removed or nonexistent features
 
-- **Evidence:** Compose dashboard/JSON layouts/presets at `README.md:130-139`; auto-generated endpoint index at `README.md:173` but `index.html` has no `{{listItems}}` placeholder; `data/` and `util/` packages at `README.md:285-291` do not exist; deleted files referenced at `README.md:385-388`; CONTRIBUTING tells contributors to edit `ui/DashboardPage.kt`, which no longer exists.
-- **Impact:** documentation overstates the project and misleads contributors/reviewers.
-- **Fix:** do a documentation truth pass; either restore the features or rewrite the claims; update API schemas and the architecture diagram.
+- **Evidence:** README/API were updated to describe the WebView Control Center, current packages, routes, settings, and schemas. `CONTRIBUTING.md` still tells contributors to edit `ui/DashboardPage.kt`; `CHANGELOG.md` still claims IMU endpoints; `README.md:408` still says JDK 17+ while the build uses Java 11.
+- **Impact:** remaining contributor docs are stale and setup expectations differ.
+- **Fix:** update CONTRIBUTING and CHANGELOG; reconcile the JDK target.
 
 ## P2-02 — `/api/log` and `/layout` are effectively dead
 
-- **Evidence:** `onLogReceived` is a no-op in `DashboardViewModel.kt:69` and `CommandHubService.kt:53`; `layoutProvider` always returns `"{}"` at `DashboardViewModel.kt:55` and `CommandHubService.kt:46`; `layout.json` is unused.
-- **Impact:** documented logging/layout functionality does nothing.
-- **Fix:** implement persistence and an update path, or remove the routes/pages/docs.
+- **Evidence:** `onLogReceived` is a no-op in `DashboardViewModel.kt:69` and `CommandHubService.kt:53`; `layoutProvider` always returns `"{}"` at `DashboardViewModel.kt:55` and `CommandHubService.kt:46`; `layout.json` is unused. README/API now mark `/layout` as legacy.
+- **Impact:** the legacy routes still do nothing, but they are no longer advertised as active features.
+- **Fix:** implement persistence and an update path, or remove the routes/pages.
 
 ## P2-03 — Auto-generated endpoint index is unused
 
-- **Evidence:** `CoreRoutes.kt:111-117` builds `listItems` and injects it into `index.html`, but the template has no `{{listItems}}` placeholder.
-- **Impact:** the README claim is false and new routes are not discoverable.
-- **Fix:** add the placeholder and render the list, or remove the feature and the claim.
+- **Evidence:** `CoreRoutes.kt:111-117` builds `listItems` and injects it into `index.html`, but the template has no `{{listItems}}` placeholder. The README claim has been removed.
+- **Impact:** dead code remains and new routes are still not discoverable from the index.
+- **Fix:** add the placeholder and render the list, or remove the dead code.
 
 ## P2-04 — Kotlin serialization plugin version likely mismatches Kotlin
 

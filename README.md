@@ -11,8 +11,9 @@
 
 CommandHub turns an Android phone into a modular control station for robotics and
 embedded projects. It exposes the phone's cameras, sensors, USB serial, Bluetooth, and
-TCP links through both a Jetpack Compose dashboard and a built-in **HTTP + WebSocket
-server** on your local network.
+TCP links through a **WebView-based Control Center** backed by a built-in **HTTP +
+WebSocket server** on your local network. Jetpack Compose is used only for the thin
+Android shell and theme.
 
 ---
 
@@ -83,12 +84,12 @@ customizable application, allowing developers to interact with microcontrollers 
 other devices without constantly switching between separate applications.
 
 Rather than creating a fixed interface, CommandHub was designed from the beginning to be
-extensible. Dashboard layouts are generated from configurable JSON files, allowing
-different interfaces to be loaded without modifying the application's source code. The
-application can be used entirely on the Android device, alongside tools such as Termux,
-or remotely from another computer through its embedded Ktor web server and companion
-desktop discovery utility. The long-term goal is to create a flexible platform that
-adapts to many different robotics and embedded projects instead of being tied to a
+extensible. The current UI is a WebView Control Center served by the app itself, so pages,
+styles, and terminal macros can be updated in editable HTML/JS assets without rebuilding
+the APK. The application can be used entirely on the Android device, alongside tools such
+as Termux, or remotely from another computer through its embedded Ktor web server and
+companion desktop discovery utility. The long-term goal is to create a flexible platform
+that adapts to many different robotics and embedded projects instead of being tied to a
 single device or workflow.
 
 <img width="829" height="372" alt="Screenshot_20260730_202411" src="https://github.com/user-attachments/assets/f8680d6b-0ff5-4c04-815a-982d2f359bfe" />
@@ -128,16 +129,17 @@ single device or workflow.
 
 ## Features
 
-### Dashboard
+### Control Center UI
 
-- Modular dashboard built with **Jetpack Compose**
-- JSON-based layout configuration (`app/src/main/assets/layout.json`)
-- Multiple dashboard pages with swipe navigation
-- Reorderable widget grid with configurable spans and aspect ratios
-- Preset layouts for the same widget slots
-- Macro button grids (configurable from the JSON layout) for sending canned commands to
-  a connected UART or Bluetooth device
-- Material Design 3 UI
+- **WebView-based Control Center** served from the embedded Ktor server at `/`
+- Module cards for camera, sensors, hardware telemetry, UART, Bluetooth, and TCP
+- **System settings** panel for flashlight, keep-screen-awake, high-speed sensors,
+  processing-UI URL, and mDNS republishing
+- **Terminal macro buttons** for the UART, Bluetooth, and TCP consoles, stored in browser
+  `localStorage` and editable from the page
+- Camera viewer with live FPS/bitrate/dropped-frame/viewer stats, resolution/FPS/quality
+  controls, zoom, exposure, grayscale, and torch toggle
+- Thin Jetpack Compose shell and Material 3 theme around the WebView
 
 ### Connectivity
 
@@ -151,16 +153,20 @@ single device or workflow.
 - Multi-camera enumeration, including logical multi-camera sub-IDs
 - **MJPEG** stream at `/stream/{id}` for browsers and OpenCV `VideoCapture`
 - **JPEG-over-WebSocket** at `/camera-ws/{id}` for low-overhead custom clients
-- **Hardware H.264** over WebSocket at `/h264-ws/{id}`, decoded in the browser with
-  WebCodecs (`VideoDecoder`) and `SharedArrayBuffer` on Chrome 138+
-- Per-stream resolution, frame rate, JPEG quality, and bitrate controls
+- **Hardware H.264** over WebSocket at `/h264-ws/{id}` for custom clients; the bundled
+  camera viewer uses JPEG-over-WebSocket rather than WebCodecs
+- Per-stream resolution, frame rate, JPEG quality, grayscale, and bitrate controls
+- Live camera stats (`/api/camera/stats`) plus zoom, exposure, and torch control
+  (`/api/camera/control`)
 - Torch / flashlight control (on, off, toggle, state query)
 
 ### Sensors & Telemetry
 
 - Live sensor streams over WebSocket for accelerometer, gyroscope, magnetometer, light,
   barometer, and anything else the phone reports
-- One-shot sensor reads over HTTP for cheap polling
+- Sensor discovery via `/api/sensors` and per-sensor viewer pages
+- One-shot sensor reads over HTTP for cheap polling (see Known Issues for the current
+  serialization limitation)
 - Hardware telemetry snapshot: battery level, temperature, voltage, current, power,
   charge state, thermal status, CPU utilisation, and memory usage
 
@@ -168,10 +174,12 @@ single device or workflow.
 
 - Ktor CIO server running **on the device**, binding `0.0.0.0:8080`
 - HTTP endpoints and WebSocket streams
-- Server-rendered HTML pages loaded from `app/src/main/assets/web/` templates with
-  `{{placeholder}}` substitution, so web pages live as editable assets rather than
-  inline Kotlin strings
-- Auto-generated index at `/` listing every registered route
+- HTML pages loaded from `app/src/main/assets/web/` templates with `{{placeholder}}`
+  substitution, so web pages live as editable assets rather than inline Kotlin strings
+- Control Center index at `/` with module cards and runtime settings
+- Settings API for screen-awake, sensor sampling speed, processing-UI URL, and mDNS
+  republishing
+- mDNS/DNS-SD advertisement (`_http._tcp.`, service `command-hub`)
 
 ---
 
@@ -182,14 +190,18 @@ schema, WebSocket frame format, and error code.
 
 | Subsystem  | Key endpoints                                                              |
 | ---------- | -------------------------------------------------------------------------- |
-| Core       | `GET /`, `GET /layout`, `POST /api/log`                                    |
-| Camera     | `GET /api/cameras`, `GET /stream/{id}`, `WS /camera-ws/{id}`, `WS /h264-ws/{id}` |
-| Sensors    | `GET /api/sensors`, `GET /api/sensors/{type}`, `WS /sensors-ws/{type}`     |
-| Hardware   | `GET /api/hardware`                                                        |
-| Flashlight | `GET /api/flashlight`, `POST /api/flashlight/toggle`                       |
+| Core       | `GET /`, `GET /log`, `POST /api/log`                                       |
+| Settings   | `GET /api/settings/state`, `GET/POST /api/settings/processing-url`, `POST /api/settings/publish-domain`, `POST /api/settings/screen-on/toggle`, `POST /api/settings/sensors-speed/toggle` |
+| Camera     | `GET /camera`, `GET /camera/{id}`, `GET /api/cameras`, `GET /stream/{id}`, `WS /camera-ws/{id}`, `WS /h264-ws/{id}`, `GET /api/camera/stats`, `POST /api/camera/control` |
+| Sensors    | `GET /sensors`, `GET /sensors/{type}`, `GET /api/sensors`, `GET /api/sensors/{type}`, `WS /sensors-ws/{type}` |
+| Hardware   | `GET /hardware`, `GET /api/hardware`                                       |
+| Flashlight | `GET /api/flashlight`, `POST /api/flashlight`, `POST /api/flashlight/toggle` |
 | UART       | `GET /uart`, `WS /uart-ws`, `POST /uart-send`                              |
 | Bluetooth  | `GET /bluetooth`, `WS /bluetooth-ws`, `POST /bluetooth-send`, `POST /bluetooth-connect` |
 | TCP        | `GET /tcp`, `WS /tcp-ws`, `POST /tcp-send`, `POST /tcp-connect`            |
+
+> The legacy `GET /layout` route still exists for compatibility, but the current WebView
+> Control Center does not load `assets/layout.json`.
 
 Example — watch a stream from Python:
 
@@ -213,7 +225,7 @@ while True:
 ## Technologies Used
 
 - Kotlin
-- Jetpack Compose (Material Design 3)
+- Jetpack Compose shell (Material Design 3) + Android WebView
 - Android ViewModel + Coroutines + StateFlow
 - Ktor Server (CIO) — HTTP, WebSockets, content negotiation
 - kotlinx.serialization for JSON
@@ -223,6 +235,7 @@ while True:
 - Bluetooth Classic (RFCOMM SPP)
 - Android `ConnectivityManager` for TCP link metrics
 - Android NsdManager for mDNS
+- SharedPreferences for app settings and browser `localStorage` for terminal macros
 - Zeroconf (Python) for the desktop discovery utility
 
 These technologies were chosen because they allow modern Android development while
@@ -238,68 +251,58 @@ separated into their own packages.
 ```
                           CommandHub
 
-                     Jetpack Compose UI
+                MainActivity (Compose shell + WebView)
                              │
                     DashboardViewModel
+        (settings, server lifecycle, manager ownership)
                              │
         ┌────────────────────┼────────────────────┐
         │                    │                    │
         ▼                    ▼                    ▼
-   Dashboard Engine     Configuration      State Management
-      (JSON)             Repository          (StateFlow)
-
-                             │
-                             ▼
-                  Hardware & Services Layer
-                             │
- ┌──────────┬──────────┬──────────┬──────────┬──────────┬──────────┐
- │          │          │          │          │          │          │
- ▼          ▼          ▼          ▼          ▼          ▼          ▼
-Bluetooth   UART     Camera    Sensors   Networking  TCP     Flashlight
-             USB                GPS
-                              IMU
-                              Compass
-                              Barometer
-                              Light
-
-                             │
-                             ▼
-                   Embedded Ktor Web Server
-                             │
-                ┌────────────┴────────────┐
-                ▼                         ▼
-       server/routes/*.kt          WebAssetLoader
-       (8 route modules)          + assets/web/*.html
-                │                         │
-                └────────────┬────────────┘
-                             ▼
-                    HTTP • WebSockets • mDNS
-                             │
-                             ▼
-                  Browser / Remote Dashboard
+  DashboardServer      Hardware managers     SharedPreferences
+  (Ktor + mDNS)        (UART, Bluetooth,     (screen-awake,
+        │               camera, sensors,      sensor speed,
+        │               TCP, telemetry)       processing URL)
+        ▼
+  server/routes/*.kt
+  (HTTP + WebSocket endpoints)
+        │
+        ▼
+  WebAssetLoader + assets/web/*.html
+        │
+        ▼
+  Browser / WebView Control Center
 ```
+
+`service/CommandHubService.kt` is a foreground-service scaffold. The current UI starts the
+server from `DashboardViewModel`; it does not start the service.
 
 ### Packages
 
 | Package            | Responsibility                                                       |
 | ------------------ | -------------------------------------------------------------------- |
-| `ui/`              | `MainActivity.kt` hosting the hardware-accelerated `WebView` Control Center interface |
-| `data/`            | Models and `LayoutRepository` for loading/saving dashboard JSON      |
-| `viewmodel/`       | `DashboardViewModel` plus one manager class per hardware subsystem   |
-| `server/`          | Ktor server setup, `WebAssetLoader`, and the `routes/` modules        |
+| `ui/`              | `MainActivity` and Material 3 theme; hosts the WebView and Android shell |
+| `viewmodel/`       | `DashboardViewModel`, `DashboardServer` (`network.kt`), and one manager per hardware subsystem |
+| `server/`          | Ktor setup, `WebAssetLoader`, and the route modules                    |
 | `server/routes/`   | One file per subsystem — the source of truth for [API.md](API.md)     |
-| `util/`            | Small helpers                                                        |
+| `service/`         | `CommandHubService` foreground-service scaffold (not started by the current UI) |
 
 ### UI
 
-The UI package contains `MainActivity`, which hosts a hardware-accelerated `WebView` loading the embedded Ktor web server dashboard (`http://127.0.0.1:8080/`). This thin-client web architecture provides infinite modularity and customization, allowing the control center UI to be styled and updated via editable HTML/JS assets without requiring APK rebuilds.
+`MainActivity` hosts a hardware-accelerated `WebView` that loads the embedded Ktor server
+at `http://127.0.0.1:8080/`. Jetpack Compose is used only for the Android shell and
+theme; the Control Center itself is HTML/CSS/JS. This keeps the UI editable without
+rebuilding the APK. The WebView enables JavaScript and DOM storage, applies the saved
+keep-screen-awake setting, and injects a floating home button when navigating to an
+external processing UI.
 
-### Data
+### State and Persistence
 
-The data package contains the models and repository classes responsible for loading
-dashboard configurations and managing persistent application data. Dashboard layouts are
-stored as JSON files, making it possible to create new interfaces simply by editing
-configuration files instead of modifying source code.
+There is no `data/` package in the current codebase. App settings such as keep-screen-on,
+sensor delay mode, and the processing-UI URL live in `SharedPreferences` and are exposed
+through the settings API. Terminal macros are stored in the browser's `localStorage`. The
+old JSON layout repository and `layout.json` are legacy and are not loaded by the current
+WebView UI.
 
 ### Hardware Managers
 
@@ -307,9 +310,9 @@ One of the most important design decisions was separating each hardware interfac
 its own manager class:
 
 - **`CameraManager.kt`** — CameraX setup, JPEG/MJPEG frame emission, H.264 encoding,
-  camera enumeration, and the flashlight.
-- **`BluetoothManager.kt`** — Bluetooth Classic discovery, connection management, and
-  bidirectional data communication.
+  camera enumeration, camera stats, zoom/exposure control, and the flashlight.
+- **`BluetoothManager.kt`** — Bluetooth Classic (`BluetoothClassicManager`) discovery,
+  connection management, and bidirectional data communication.
 - **`UartManager.kt`** — USB serial communication with external microcontrollers.
 - **`SensorManager.kt`** — Android `SensorManager` access for the accelerometer,
   gyroscope, magnetometer, light sensor, barometer, and other available hardware.
@@ -319,6 +322,9 @@ its own manager class:
 - **`network.kt`** — the `DashboardServer` class: builds and owns the Ktor server,
   wires up every route module, manages mDNS registration, and holds the Wi-Fi multicast
   lock. Route logic itself lives in `server/routes/`, not here.
+
+`service/CommandHubService.kt` is a foreground-service scaffold and is not started by the
+current UI.
 
 Keeping these systems independent improves maintainability while making it easier to add
 support for additional communication protocols and hardware features in future versions.
@@ -331,40 +337,44 @@ delegates each subsystem to a module in `server/routes/`:
 
 | Route module       | Mounted paths                                   |
 | ------------------ | ----------------------------------------------- |
-| `CoreRoutes.kt`    | `/`, `/layout`, `/log`, `/api/log`              |
-| `CameraRoutes.kt`  | `/camera`, `/stream/{id}`, `/api/cameras`, `/camera-ws/{id}`, `/h264-ws/{id}` |
-| `SensorRoutes.kt`  | `/sensors`, `/api/sensors`, `/sensors-ws/{type}` |
+| `CoreRoutes.kt`    | `/`, `/layout` (legacy), `/log`, `/api/log`, `/api/settings/*` |
+| `CameraRoutes.kt`  | `/camera`, `/camera/{id}`, `/stream/{id}`, `/api/cameras`, `/api/camera/stats`, `/api/camera/control`, `/camera-ws/{id}`, `/h264-ws/{id}` |
+| `SensorRoutes.kt`  | `/sensors`, `/sensors/{type}`, `/api/sensors`, `/api/sensors/{type}`, `/sensors-ws/{type}` |
 | `HardwareRoutes.kt`| `/hardware`, `/api/hardware`                    |
-| `FlashlightRoutes.kt` | `/api/flashlight`, `/api/flashlight/toggle`   |
+| `FlashlightRoutes.kt` | `GET/POST /api/flashlight`, `/api/flashlight/toggle` |
 | `UartRoutes.kt`    | `/uart`, `/uart-ws`, `/uart-send`               |
 | `BluetoothRoutes.kt` | `/bluetooth`, `/bluetooth-ws`, `/bluetooth-send`, `/bluetooth-connect` |
 | `TcpRoutes.kt`     | `/tcp`, `/tcp-ws`, `/tcp-send`, `/tcp-connect`  |
 
-Each module registers its routes through a shared `register(path, name)` helper that
-also records the path for the auto-generated index page at `/`.
+Each module registers its routes through a shared `register(path, name)` helper.
 
 ### Assets
 
-- `assets/layout.json` — the default dashboard layout.
 - `assets/web/*.html` — templates for every web page, filled in by `WebAssetLoader`
   using `{{placeholder}}` substitution. Keeping pages in `assets/` means they can be
   edited without touching Kotlin code.
+- `assets/layout.json` is a legacy file and is not loaded by the current WebView UI.
 
 ---
 
 ## Design Decisions
 
-**Jetpack Compose over XML.** Compose allows the dashboard to be generated dynamically
-from configuration data while significantly reducing UI boilerplate. Since layouts are
-loaded from JSON, Compose makes it much easier to generate widgets programmatically.
+**WebView shell over a native dashboard.** The Control Center is served by the app's own
+Ktor server and rendered in a WebView. This keeps the UI in editable HTML/CSS/JS assets,
+allows remote access from any browser, and avoids rebuilding the APK for layout changes.
+Jetpack Compose is still used for the thin Android shell and theme.
+
+**No JSON layout engine.** The earlier JSON-driven Compose dashboard and layout repository
+were removed. The current UI is a WebView Control Center with static module cards and a
+small settings API; `layout.json` is no longer loaded.
 
 **Separate manager classes per subsystem.** Rather than placing Bluetooth, USB,
 networking, and camera logic inside a single large activity, each subsystem has its own
 implementation. This keeps responsibilities clearly separated and improves readability.
 
-**Coroutines and StateFlow throughout.** Hardware communication is naturally
-asynchronous, and reactive programming allows the interface to update automatically
-whenever new information is received.
+**Coroutines and StateFlow for asynchronous state.** Hardware communication is naturally
+asynchronous. Coroutines and StateFlow are used where reactive state is needed, while
+blocking I/O runs on dedicated threads.
 
 **HTML pages as assets, not inline strings.** Early versions of the server built every
 web page with Kotlin string literals, which became unreadable as the pages grew. Moving
@@ -381,21 +391,19 @@ read in isolation.
 
 | File / Directory        | Purpose                                                             |
 | ----------------------- | ------------------------------------------------------------------- |
-| `ui/MainActivity.kt`    | Entry point — initializes the UI, requests runtime permissions, starts the dashboard |
-| `viewmodel/DashboardViewModel.kt` | Owns application state and coordinates the UI, hardware, and background services |
-| `ui/DashboardPager.kt`  | Navigation between dashboard pages                                  |
-| `ui/DashboardPage.kt`   | Renders widgets on each dashboard screen                            |
-| `data/LayoutRepository.kt` | Loads, saves, and manages dashboard configurations as JSON        |
-| `assets/layout.json`    | Default dashboard layout, editable without recompiling              |
-| `viewmodel/network.kt`  | `DashboardServer` — Ktor server construction and lifecycle          |
+| `ui/MainActivity.kt`    | Entry point — Compose shell, WebView, camera permission, keep-screen-on, external-UI home button |
+| `viewmodel/DashboardViewModel.kt` | Owns managers, saved settings, and the server lifecycle |
+| `viewmodel/network.kt`  | `DashboardServer` — Ktor construction, mDNS, multicast/wake locks, route wiring |
 | `server/routes/*.kt`    | The full HTTP/WebSocket surface (see [API.md](API.md))              |
 | `server/WebAssetLoader.kt` | Loads and caches `assets/web/*.html` templates                  |
-| `viewmodel/CameraManager.kt`    | Camera access, streaming, H.264 encoding, flashlight      |
+| `viewmodel/CameraManager.kt`    | Camera enumeration, MJPEG/JPEG/H.264 streaming, stats, zoom/exposure, flashlight |
 | `viewmodel/BluetoothManager.kt` | Bluetooth Classic connections and data transfer            |
 | `viewmodel/UartManager.kt`      | USB serial communication                           |
-| `viewmodel/SensorManager.kt`    | Onboard sensor access                             |
+| `viewmodel/SensorManager.kt`    | Onboard sensor access and sampling modes            |
 | `viewmodel/TcpManager.kt`       | TCP client connections and link metrics           |
 | `viewmodel/HardwareManager.kt`  | Battery, thermal, CPU, and RAM telemetry           |
+| `service/CommandHubService.kt`  | Foreground-service scaffold (not started by the current UI) |
+| `assets/web/*.html`             | Control Center pages, camera/sensor viewers, and terminals |
 | `pc_files/android_domain.py`    | mDNS discovery helper for desktop clients         |
 
 ---
@@ -457,18 +465,19 @@ JAVA_HOME=/opt/android-studio/jbr ./gradlew lintDebug
 ## Challenges
 
 The largest challenge during development was integrating several Android hardware APIs
-into one application. USB serial communication, Bluetooth, camera access, networking, and
-Compose each have different permission models and lifecycle requirements. Ensuring these
-systems worked together reliably required significant experimentation, debugging, and
-testing.
+into one application. USB serial communication, Bluetooth, camera access, the embedded
+server, and the WebView each have different permission models and lifecycle requirements.
+Ensuring these systems worked together reliably required significant experimentation,
+debugging, and testing.
 
-Another challenge was designing a dashboard system flexible enough to support different
-widget types while remaining easy to configure using JSON files.
+Another challenge was keeping the WebView Control Center and the native managers in sync
+while the UI was refactored away from the earlier JSON/Compose dashboard. The settings API
+and manager-owned state now provide a smaller, more predictable contract.
 
 On the streaming side, delivering smooth video meant choosing between latency and
 compatibility: MJPEG works everywhere but is heavy on the wire, while hardware H.264 is
-far more efficient but requires WebCodecs and a shared-memory configuration handshake to
-decode in the browser.
+far more efficient but needs a custom WebSocket client. The bundled viewer therefore uses
+JPEG-over-WebSocket, with H.264 exposed for clients that can decode it.
 
 ## Known Issues & Fix Plan
 
@@ -490,12 +499,18 @@ Although the current version is functional, several improvements are planned:
 
 - **Authentication and access control** for the embedded server
   ([issue #4](https://github.com/Jedimig08/CommandHub/issues/4))
+- Camera lifecycle and WebSocket reconnect fixes
+  ([issue #5](https://github.com/Jedimig08/CommandHub/issues/5))
+- Capability detection and permission handling for unavailable modules
+  ([issue #6](https://github.com/Jedimig08/CommandHub/issues/6))
+- Microphone streaming
+  ([issue #7](https://github.com/Jedimig08/CommandHub/issues/7))
 - Bluetooth Low Energy support
 - Fix periodic re-pings for connected Bluetooth Classic devices
   ([issue #3](https://github.com/Jedimig08/CommandHub/issues/3))
 - MAVLink support for drone communication
 - Additional telemetry widgets and graph visualization
-- User-created dashboard editor
+- Web-based dashboard editor
 - Plugin system
 - Wi-Fi communication modules
 - Cloud synchronization
@@ -548,8 +563,8 @@ development practices, hardware communication, networking, asynchronous programm
 software architecture into a single extensible application.
 
 Although the project is already functional, I intend to continue developing it beyond
-CS50 by adding additional communication protocols, telemetry visualization, and a fully
-configurable dashboard editor.
+CS50 by adding additional communication protocols, telemetry visualization, and a
+web-based dashboard editor.
 
 ## License
 

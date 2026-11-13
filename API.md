@@ -16,8 +16,9 @@ hardware over plain HTTP and WebSockets.
 - [Service Discovery](#service-discovery)
 - [Conventions](#conventions)
 - [Core](#core)
+- [Settings](#settings)
 - [Camera](#camera)
-- [Sensors & IMU](#sensors--imu)
+- [Sensors](#sensors)
 - [Hardware Telemetry](#hardware-telemetry)
 - [Flashlight](#flashlight)
 - [UART Terminal](#uart-terminal)
@@ -82,23 +83,80 @@ Camera and stream routes share a common set of query parameters:
 
 ### `GET /`
 
-Returns the universal Control Center dashboard web UI.
+Returns the Control Center web UI.
 
 **Response:** `200 text/html`
 
-### `GET /layout`
+### `GET /log`
 
-Returns the currently active dashboard layout as JSON.
+Returns the dashboard logger page.
+
+**Response:** `200 text/html`
+
+### `GET /layout` (legacy)
+
+Returns `{}`. The current WebView UI does not load `assets/layout.json`; this route is
+kept for compatibility with older clients.
 
 **Response:** `200 application/json`
 
 ### `POST /api/log`
 
-Updates the text of a dashboard module. Body is JSON (`LogRequest`).
+Accepts a JSON `LogRequest` (`id`, `text`). Used by the optional logger page at `/log`.
+
+---
+
+## Settings
+
+### `GET /api/settings/state`
+
+Returns the current runtime settings.
+
+```json
+{
+  "screenOn": true,
+  "sensorFastest": false,
+  "processingUrl": "http://127.0.0.1:5000/"
+}
+```
+
+### `GET /api/settings/processing-url`
+
+Returns the saved Linux/Termux processing-UI URL.
+
+### `POST /api/settings/processing-url`
+
+Saves the processing-UI URL. Accepts either a JSON body (`{"url":"http://..."}`) or an
+`url` query parameter.
+
+### `POST /api/settings/publish-domain`
+
+Re-publishes the mDNS/DNS-SD advertisement.
+
+### `POST /api/settings/screen-on/toggle`
+
+Toggles keep-screen-awake and returns the new state.
+
+### `POST /api/settings/sensors-speed/toggle`
+
+Toggles sensor sampling between UI rate and `SENSOR_DELAY_FASTEST` and returns the new
+state.
 
 ---
 
 ## Camera
+
+### `GET /camera`
+
+Camera hub page listing available cameras.
+
+**Response:** `200 text/html`
+
+### `GET /camera/{id}`
+
+Camera viewer page for a specific camera ID.
+
+**Response:** `200 text/html`
 
 ### `GET /api/cameras`
 
@@ -117,7 +175,13 @@ cap = cv2.VideoCapture("http://192.168.1.42:8080/stream/0?res=640x480&fps=15&gra
 
 ### `WS /camera-ws/{id}`
 
-WebSocket streaming JPEG frames. Supports query parameters `res`, `fps`, `quality`, and `grayscale`.
+WebSocket streaming JPEG frames. Supports query parameters `res`, `fps`, `quality`, and
+`grayscale`.
+
+### `WS /h264-ws/{id}`
+
+WebSocket streaming hardware-encoded H.264. Supports `res`, `fps`, `bitrate`, and
+`grayscale`. The bundled viewer uses JPEG-over-WebSocket instead.
 
 ### `GET /api/camera/stats`
 
@@ -134,29 +198,49 @@ Remote camera control endpoint. Accepts query parameters:
 
 ---
 
-## Sensors & IMU
+## Sensors
+
+### `GET /sensors`
+
+Sensor hub page listing the device's available sensors.
+
+**Response:** `200 text/html`
+
+### `GET /sensors/{type}`
+
+Sensor viewer page for an Android sensor type constant.
+
+**Response:** `200 text/html`
 
 ### `GET /api/sensors`
 
 Lists the device's hardware sensors.
 
+**Response:** `200 application/json` — array of [`SensorInfo`](#sensorinfo).
+
+### `GET /api/sensors/{type}`
+
+Returns the latest buffered reading for one sensor type. The intended response is
+`{"id": <type>, "value": <SensorData>}` when data is available.
+
+> **Known issue:** the current mixed-type map response can fail serialization. Use
+> `/sensors-ws/{type}` until this is fixed.
+
 ### `WS /sensors-ws/{type}`
 
 Streams live sensor readings for a specific sensor type constant.
 
-### `WS /ws/sensors/imu`
-
-Streams high-rate synchronized 9-DOF IMU telemetry (Accelerometer, Gyroscope, Magnetometer, and Orientation Quaternions).
-
-**Response:** UTF-8 JSON [`ImuData`](#imudata).
-
-### `GET /api/sensors/imu`
-
-Returns the most recent 9-DOF IMU reading snapshot.
+**Response:** UTF-8 JSON [`SensorData`](#sensordata).
 
 ---
 
 ## Hardware Telemetry
+
+### `GET /hardware`
+
+Hardware and power dashboard page.
+
+**Response:** `200 text/html`
 
 ### `GET /api/hardware`
 
@@ -193,32 +277,75 @@ Bidirectional UART communication endpoints.
 
 ## Data Schemas
 
+### `CameraInfo`
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Camera ID |
+| `facing` | string | Front/back/external |
+| `type` | string | Logical or physical |
+| `focalLength` | float | Focal length |
+| `isPhysical` | bool | Physical camera flag |
+| `supportedResolutions` | array | Supported `{width, height}` pairs |
+
 ### `CameraStats`
 | Field | Type | Description |
 |---|---|---|
+| `activeCameraId` | string? | Camera currently streaming |
+| `resolution` | string? | Current `WxH` |
+| `targetFps` | int | Requested FPS |
 | `currentFps` | float | Actual measured FPS |
+| `totalFramesCaptured` | long | Frames captured |
+| `totalFramesDropped` | long | Dropped frames |
+| `totalBytesStreamed` | long | Bytes sent to viewers |
 | `bitrateBps` | long | Throughput in bits per second |
-| `totalFramesDropped` | long | Dropped frames count |
 | `activeViewers` | int | Active stream subscriber count |
 | `zoomRatio` | float | Current zoom level |
+| `minZoomRatio`, `maxZoomRatio` | float | Zoom range |
+| `exposureIndex` | int | Current exposure compensation |
+| `minExposureIndex`, `maxExposureIndex` | int | Exposure range |
+| `torchEnabled` | bool | Torch state |
 
-### `ImuData`
+### `SensorInfo`
 | Field | Type | Description |
 |---|---|---|
-| `timestampNanos` | long | Nanosecond sensor timestamp |
-| `accelX`, `accelY`, `accelZ` | float | Linear acceleration (m/s²) |
-| `gyroX`, `gyroY`, `gyroZ` | float | Angular velocity (rad/s) |
-| `quatX`, `quatY`, `quatZ`, `quatW` | float | Orientation quaternion |
+| `id` | int | Sensor ID |
+| `name` | string | Sensor name |
+| `vendor` | string | Sensor vendor |
+| `type` | int | Android sensor type constant |
+| `stringType` | string | Android string type |
+
+### `SensorData`
+| Field | Type | Description |
+|---|---|---|
+| `type` | int | Android sensor type constant |
+| `timestamp` | long | Sensor timestamp in nanoseconds |
+| `values` | float[] | Sensor values in Android order |
 
 ### `HardwareTelemetry`
 | Field | Type | Description |
 |---|---|---|
 | `batteryLevelPct` | int | Battery percentage |
 | `batteryTempCelsius` | float | Battery temperature |
+| `batteryVoltageV` | float | Battery voltage |
+| `currentNowMa` | float | Instantaneous current in mA |
 | `powerWatts` | float | Instantaneous power draw |
+| `isCharging` | bool | Charging state |
+| `chargingSource` | string | Charging source |
+| `thermalStatus` | string | Thermal status |
 | `isOverheating` | bool | Thermal throttling / overheating flag |
 | `cpuUsagePct` | float | App CPU usage percentage |
 | `ramUsedMb` | long | Used RAM in MB |
+| `ramTotalMb` | long | Total RAM in MB |
+
+---
+
+## Errors
+
+| Status | Meaning |
+|---|---|
+| `400 Bad Request` | Malformed JSON body or missing/invalid parameter |
+| `503 Service Unavailable` | Camera provider not ready (`/api/cameras`) |
+| WebSocket close | Missing/invalid path parameter or client disconnect |
 
 ---
 
@@ -230,9 +357,14 @@ import cv2
 cap = cv2.VideoCapture("http://192.168.1.42:8080/stream/0?res=640x480&fps=15&grayscale=true")
 ```
 
-**Stream 9-DOF IMU over WebSocket:**
+**Stream the accelerometer over WebSocket (Android type `1`):**
 ```bash
-npx wscat -c ws://192.168.1.42:8080/ws/sensors/imu
+npx wscat -c ws://192.168.1.42:8080/sensors-ws/1
+```
+
+**Toggle keep-screen-awake:**
+```bash
+curl -X POST http://192.168.1.42:8080/api/settings/screen-on/toggle
 ```
 
 **Send G-Code to Polargraph over UART:**
