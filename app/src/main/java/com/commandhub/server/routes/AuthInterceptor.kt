@@ -17,6 +17,13 @@ fun Application.installAuthInterceptor(authManager: AuthManager) {
         val path = call.request.path()
         val remoteHost = call.request.local.remoteHost
 
+        // Rate limit pairing or login attempts
+        if ((path == "/pair" || path == "/login") && !authManager.checkRateLimit(remoteHost)) {
+            call.respond(HttpStatusCode.TooManyRequests, mapOf("error" to "Too many attempts. Locked out temporarily."))
+            finish()
+            return@intercept
+        }
+
         // Allow public paths
         val isPublic = path == "/" ||
                 path == "/login" ||
@@ -29,13 +36,6 @@ fun Application.installAuthInterceptor(authManager: AuthManager) {
                 path.endsWith(".png")
 
         if (isPublic) {
-            return@intercept
-        }
-
-        // Rate limit pairing or login if applicable
-        if ((path == "/pair" || path == "/login") && !authManager.checkRateLimit(remoteHost)) {
-            call.respond(HttpStatusCode.TooManyRequests, mapOf("error" to "Too many attempts. Locked out temporarily."))
-            finish()
             return@intercept
         }
 
