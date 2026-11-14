@@ -15,6 +15,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     val sensorManager = SensorManager(application)
     val tcpManager = TcpManager()
     val hardwareManager = HardwareManager(application)
+    val privacyManager by lazy { server.privacyManager }
 
     private val prefs = application.getSharedPreferences("dashboard_prefs", Context.MODE_PRIVATE)
 
@@ -29,11 +30,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         prefs.edit { putString("processing_ui_url", url) }
     }
 
-    var sensorDelayFastest by mutableStateOf(false)
+    var sensorDelayFastest by mutableStateOf(prefs.getBoolean("sensor_delay_fastest", false))
         private set
 
     fun updateSensorDelayMode(fastest: Boolean) {
         sensorDelayFastest = fastest
+        prefs.edit { putBoolean("sensor_delay_fastest", fastest) }
         sensorManager.setSensorDelayMode(
             if (fastest) android.hardware.SensorManager.SENSOR_DELAY_FASTEST
             else android.hardware.SensorManager.SENSOR_DELAY_UI,
@@ -71,6 +73,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     init {
         server.start()
         uartManager.connect()
+        if (sensorDelayFastest) {
+            sensorManager.setSensorDelayMode(android.hardware.SensorManager.SENSOR_DELAY_FASTEST)
+        }
     }
 
     override fun onCleared() {

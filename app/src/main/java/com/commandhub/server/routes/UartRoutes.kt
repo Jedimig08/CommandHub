@@ -42,7 +42,10 @@ fun Route.configureUartRoutes(
         try {
             incoming.consumeEach { frame ->
                 (frame as? Frame.Text)?.let {
-                    uartManager.send(it.readText())
+                    val text = it.readText()
+                    if (text.trim() != "PING") {
+                        uartManager.send(text)
+                    }
                 }
             }
         } finally {
@@ -52,7 +55,9 @@ fun Route.configureUartRoutes(
 
     post("/uart-send") {
         val text = call.receiveText()
-        uartManager.send(text)
+        if (text.trim() != "PING") {
+            uartManager.send(text)
+        }
         call.respond(HttpStatusCode.OK)
     }
 }

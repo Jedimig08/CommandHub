@@ -121,6 +121,10 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     modifier = Modifier.fillMaxSize(),
+                    onRelease = { view ->
+                        view.destroy()
+                        webViewInstance = null
+                    },
                 )
             }
         }

@@ -77,7 +77,7 @@ fun Route.configureBluetoothRoutes(
         try {
             for (frame in incoming) {
                 val text = (frame as? Frame.Text)?.readText()?.trim() ?: continue
-                if (isValidBluetoothInput(text)) {
+                if (text != "PING" && isValidBluetoothInput(text)) {
                     bluetoothManager.send(text)
                 }
             }
@@ -88,7 +88,7 @@ fun Route.configureBluetoothRoutes(
 
     post("/bluetooth-send") {
         val text = call.receiveText()
-        if (isValidBluetoothInput(text)) {
+        if (text.trim() != "PING" && isValidBluetoothInput(text)) {
             bluetoothManager.send(text)
         }
         call.respond(HttpStatusCode.OK)

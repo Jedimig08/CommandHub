@@ -127,6 +127,8 @@
     <script>
         let ws;
         let lastActivity = Date.now();
+        let pingInterval = null;
+        let heartbeatEnabled = false;
 
         const DEFAULT_MACROS = [
             { label: "M1: START", cmd: "START" },
@@ -157,23 +159,45 @@
             consoleDiv.scrollTop = consoleDiv.scrollHeight;
         }
 
+        function toggleHeartbeat(enabled) {
+            heartbeatEnabled = enabled;
+            localStorage.setItem('terminal_heartbeat', enabled ? 'true' : 'false');
+            setupPingInterval();
+        }
+
+        function setupPingInterval() {
+            if (pingInterval) {
+                clearInterval(pingInterval);
+                pingInterval = null;
+            }
+            if (heartbeatEnabled) {
+                pingInterval = setInterval(() => {
+                    if (ws && ws.readyState === WebSocket.OPEN && (Date.now() - lastActivity > 5000)) {
+                        ws.send("PING");
+                    }
+                }, 2000);
+            }
+        }
+
         function connectWs() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(protocol + '//' + window.location.host + '{{wsEndpoint}}');
+
+            ws.onopen = () => {
+                setupPingInterval();
+            };
 
             ws.onmessage = (e) => {
                 appendLog('<span style="color:#0f0;">RX:</span> ' + e.data);
             };
 
             ws.onclose = () => {
+                if (pingInterval) {
+                    clearInterval(pingInterval);
+                    pingInterval = null;
+                }
                 setTimeout(connectWs, 2000);
             };
-
-            setInterval(() => {
-                if (ws && ws.readyState === WebSocket.OPEN && (Date.now() - lastActivity > 5000)) {
-                    ws.send("PING");
-                }
-            }, 2000);
         }
 
         function escapeHtml(str) {
@@ -260,6 +284,9 @@
         }
 
         window.onload = () => {
+            heartbeatEnabled = localStorage.getItem('terminal_heartbeat') === 'true';
+            const cb = document.getElementById('enableHeartbeat');
+            if (cb) cb.checked = heartbeatEnabled;
             connectWs();
             renderMacros();
         };
@@ -269,6 +296,12 @@
     <h1>{{title}}</h1>
 
     {{extraControls}}
+
+    <div style="margin-bottom: 12px;">
+        <label style="color: #aaa; cursor: pointer; font-size: 0.9em;">
+            <input type="checkbox" id="enableHeartbeat" onchange="toggleHeartbeat(this.checked)"> Enable Heartbeat (PING every 2s when idle)
+        </label>
+    </div>
 
     <div class="macro-section">
         <div class="macro-header">

@@ -63,7 +63,10 @@ fun Route.configureTcpRoutes(
         try {
             incoming.consumeEach { frame ->
                 (frame as? Frame.Text)?.let {
-                    tcpManager.send(it.readText())
+                    val text = it.readText()
+                    if (text.trim() != "PING") {
+                        tcpManager.send(text)
+                    }
                 }
             }
         } finally {
@@ -73,7 +76,9 @@ fun Route.configureTcpRoutes(
 
     post("/tcp-send") {
         val text = call.receiveText()
-        tcpManager.send(text)
+        if (text.trim() != "PING") {
+            tcpManager.send(text)
+        }
         call.respond(HttpStatusCode.OK)
     }
 

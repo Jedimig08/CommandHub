@@ -7,15 +7,18 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.PowerManager
+import com.commandhub.data.PrivacyManager
 import com.commandhub.server.WebAssetLoader
 import com.commandhub.server.routes.configureBluetoothRoutes
 import com.commandhub.server.routes.configureCameraRoutes
 import com.commandhub.server.routes.configureCoreRoutes
 import com.commandhub.server.routes.configureFlashlightRoutes
 import com.commandhub.server.routes.configureHardwareRoutes
+import com.commandhub.server.routes.configurePrivacyRoutes
 import com.commandhub.server.routes.configureSensorRoutes
 import com.commandhub.server.routes.configureTcpRoutes
 import com.commandhub.server.routes.configureUartRoutes
+import com.commandhub.server.routes.installPrivacyInterceptor
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
@@ -59,6 +62,7 @@ class DashboardServer(
     private val sensorManager: SensorManager,
     private val tcpManager: TcpManager,
     private val hardwareManager: HardwareManager,
+    val privacyManager: PrivacyManager = PrivacyManager(context),
     private val onLogReceived: (String, String) -> Unit,
 ) {
     private val webAssetLoader = WebAssetLoader(context)
@@ -77,6 +81,31 @@ class DashboardServer(
     @SuppressLint("WakelockTimeout")
     fun start() {
         registeredEndpoints.clear()
+
+        // Hook up privacy state changes to immediate stream/hardware teardowns
+        privacyManager.onPrivacyStateChanged = { state ->
+            val isOffline = state.accessMode == com.commandhub.data.AccessMode.OFFLINE
+            if (isOffline || !state.cameraEnabled) {
+                cameraManager.stopStreaming()
+            }
+            if (isOffline || !state.flashlightEnabled) {
+                cameraManager.setFlashlight(false)
+            }
+            if (isOffline || !state.sensorsEnabled) {
+                sensorManager.stopAll()
+            }
+            if (isOffline || !state.bluetoothEnabled) {
+                bluetoothManager.disconnect()
+            }
+            if (isOffline || !state.uartEnabled) {
+                uartManager.disconnect()
+            }
+            if (isOffline || !state.tcpEnabled) {
+                tcpManager.disconnect()
+            }
+        }
+        privacyManager.onPrivacyStateChanged?.invoke(privacyManager.getState())
+
         // Acquire Locks to prevent sleep and throttling
         try {
             val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
@@ -100,6 +129,7 @@ class DashboardServer(
 
         try {
             server = embeddedServer(CIO, port = port, host = "0.0.0.0") {
+                installPrivacyInterceptor(privacyManager)
                 install(ContentNegotiation) { json() }
                 install(WebSockets) {
                     pingPeriod = 20.seconds
@@ -114,6 +144,7 @@ class DashboardServer(
                         get(path) { body() }
                     }
 
+                    configurePrivacyRoutes(webAssetLoader, privacyManager, ::register)
                     configureCoreRoutes(
                         assetLoader = webAssetLoader,
                         layoutProvider = layoutProvider,

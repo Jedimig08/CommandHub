@@ -29,6 +29,10 @@
     <div class="grid">
         <div class="card">
             <!--suppress HtmlUnknownTarget -->
+            <a href="/privacy"><span class="icon">🛡️</span>Privacy & Access</a>
+        </div>
+        <div class="card">
+            <!--suppress HtmlUnknownTarget -->
             <a href="/camera"><span class="icon">📷</span>Camera Stream</a>
         </div>
         <div class="card">
@@ -72,6 +76,12 @@
 
     <div class="section">
         <h3>⚙ System Settings</h3>
+        <div class="setting-row">
+            <span>Privacy Control Center</span>
+            <button id="privacyStatusBtn" onclick="window.location.href='/privacy';" style="background:#ef4444;">
+                Privacy: LOCKED
+            </button>
+        </div>
         <div class="setting-row">
             <span>Flashlight / Torch</span>
             <button id="torchBtn" onclick="
@@ -119,6 +129,19 @@
 
     <script>
         function loadSettings() {
+            fetch('/api/privacy/state')
+                .then(r => r.json())
+                .then(d => {
+                    const privacyBtn = document.getElementById('privacyStatusBtn');
+                    if (privacyBtn) {
+                        privacyBtn.innerText = 'Mode: ' + d.accessMode;
+                        if (d.accessMode === 'OFFLINE') privacyBtn.style.background = '#ef4444';
+                        else if (d.accessMode === 'LOCAL_ONLY') privacyBtn.style.background = '#0284c7';
+                        else privacyBtn.style.background = '#10b981';
+                    }
+                })
+                .catch(() => {});
+
             fetch('/api/settings/state')
                 .then(r => r.json())
                 .then(d => {
