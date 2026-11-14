@@ -7,6 +7,7 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.PowerManager
+import com.commandhub.data.AuthManager
 import com.commandhub.data.PrivacyManager
 import com.commandhub.server.WebAssetLoader
 import com.commandhub.server.routes.configureBluetoothRoutes
@@ -18,6 +19,7 @@ import com.commandhub.server.routes.configurePrivacyRoutes
 import com.commandhub.server.routes.configureSensorRoutes
 import com.commandhub.server.routes.configureTcpRoutes
 import com.commandhub.server.routes.configureUartRoutes
+import com.commandhub.server.routes.installAuthInterceptor
 import com.commandhub.server.routes.installPrivacyInterceptor
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
@@ -37,9 +39,6 @@ import java.util.Collections
 import kotlin.time.Duration.Companion.seconds
 
 @Serializable
-data class LogRequest(val id: String = "", val text: String = "")
-
-@Serializable
 data class TcpConnectRequest(val ip: String = "", val port: Int = 8888)
 
 @Serializable
@@ -48,7 +47,6 @@ data class FlashlightRequest(val enabled: Boolean = false)
 class DashboardServer(
     private val context: Context,
     private val port: Int = 8080,
-    private val layoutProvider: () -> String,
     private val getProcessingUrl: () -> String = { "" },
     private val setProcessingUrl: (String) -> Unit = {},
     private val publishDomain: () -> Unit = {},
@@ -63,7 +61,7 @@ class DashboardServer(
     private val tcpManager: TcpManager,
     private val hardwareManager: HardwareManager,
     val privacyManager: PrivacyManager = PrivacyManager(context),
-    private val onLogReceived: (String, String) -> Unit,
+    val authManager: AuthManager = AuthManager(context),
 ) {
     private val webAssetLoader = WebAssetLoader(context)
     private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
@@ -73,6 +71,7 @@ class DashboardServer(
 
     private val serviceName = "command-hub"
     private val serviceType = "_http._tcp."
+    private val nsdLock = Any()
     private var registrationListener: NsdManager.RegistrationListener? = null
 
     private val registeredEndpoints =
@@ -129,6 +128,7 @@ class DashboardServer(
 
         try {
             server = embeddedServer(CIO, port = port, host = "0.0.0.0") {
+                installAuthInterceptor(authManager)
                 installPrivacyInterceptor(privacyManager)
                 install(ContentNegotiation) { json() }
                 install(WebSockets) {
@@ -147,7 +147,7 @@ class DashboardServer(
                     configurePrivacyRoutes(webAssetLoader, privacyManager, ::register)
                     configureCoreRoutes(
                         assetLoader = webAssetLoader,
-                        layoutProvider = layoutProvider,
+                        authManager = authManager,
                         getProcessingUrl = getProcessingUrl,
                         setProcessingUrl = setProcessingUrl,
                         publishDomain = publishDomain,
@@ -155,7 +155,6 @@ class DashboardServer(
                         setKeepScreenOnEnabled = setKeepScreenOnEnabled,
                         getSensorDelayFastest = getSensorDelayFastest,
                         updateSensorDelayMode = updateSensorDelayMode,
-                        onLogReceived = onLogReceived,
                         registeredEndpoints = registeredEndpoints,
                         register = ::register,
                     )
@@ -175,41 +174,43 @@ class DashboardServer(
     }
 
     fun registerService(port: Int = this.port) {
-        nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+        synchronized(nsdLock) {
+            nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
 
-        registrationListener?.let {
+            registrationListener?.let {
+                try {
+                    nsdManager?.unregisterService(it)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                registrationListener = null
+            }
+
+            val serviceInfo = NsdServiceInfo().apply {
+                serviceName = this@DashboardServer.serviceName
+                serviceType = this@DashboardServer.serviceType
+                this.port = port
+            }
+
+            registrationListener = object : NsdManager.RegistrationListener {
+                override fun onServiceRegistered(info: NsdServiceInfo) {
+                    println("mDNS: Service registered")
+                }
+
+                override fun onRegistrationFailed(info: NsdServiceInfo, error: Int) {}
+                override fun onServiceUnregistered(info: NsdServiceInfo) {}
+                override fun onUnregistrationFailed(info: NsdServiceInfo, error: Int) {}
+            }
+
             try {
-                nsdManager?.unregisterService(it)
+                nsdManager?.registerService(
+                    serviceInfo,
+                    NsdManager.PROTOCOL_DNS_SD,
+                    registrationListener,
+                )
             } catch (e: Exception) {
                 e.printStackTrace()
             }
-            registrationListener = null
-        }
-
-        val serviceInfo = NsdServiceInfo().apply {
-            serviceName = this@DashboardServer.serviceName
-            serviceType = this@DashboardServer.serviceType
-            this.port = port
-        }
-
-        registrationListener = object : NsdManager.RegistrationListener {
-            override fun onServiceRegistered(info: NsdServiceInfo) {
-                println("mDNS: Service registered")
-            }
-
-            override fun onRegistrationFailed(info: NsdServiceInfo, error: Int) {}
-            override fun onServiceUnregistered(info: NsdServiceInfo) {}
-            override fun onUnregistrationFailed(info: NsdServiceInfo, error: Int) {}
-        }
-
-        try {
-            nsdManager?.registerService(
-                serviceInfo,
-                NsdManager.PROTOCOL_DNS_SD,
-                registrationListener,
-            )
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 
@@ -217,7 +218,15 @@ class DashboardServer(
         multicastLock?.let { if (it.isHeld) it.release() }
         wakeLock?.let { if (it.isHeld) it.release() }
         server?.stop(1000, 2000)
-        nsdManager?.unregisterService(registrationListener)
-        registrationListener = null
+        synchronized(nsdLock) {
+            registrationListener?.let {
+                try {
+                    nsdManager?.unregisterService(it)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                registrationListener = null
+            }
+        }
     }
 }

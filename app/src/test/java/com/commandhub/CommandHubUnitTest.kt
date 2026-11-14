@@ -117,7 +117,6 @@ class CommandHubUnitTest {
         assertTrue(state.uartEnabled)
         assertTrue(state.tcpEnabled)
         assertTrue(state.flashlightEnabled)
-        assertTrue(state.logEnabled)
         assertTrue(state.microphoneEnabled)
         assertTrue(state.locationEnabled)
         assertTrue(state.fileSystemEnabled)
@@ -176,7 +175,6 @@ class CommandHubUnitTest {
         assertNull(cameraDisabledState.evaluateAccess("/uart", "127.0.0.1"))
         assertNull(cameraDisabledState.evaluateAccess("/tcp", "127.0.0.1"))
         assertNull(cameraDisabledState.evaluateAccess("/api/flashlight", "127.0.0.1"))
-        assertNull(cameraDisabledState.evaluateAccess("/log", "127.0.0.1"))
 
         // Sensors toggle
         val sensorsDisabledState = baseState.copy(sensorsEnabled = false)

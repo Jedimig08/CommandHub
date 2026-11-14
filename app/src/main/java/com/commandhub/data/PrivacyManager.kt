@@ -209,15 +209,5 @@ fun PrivacyState.evaluateAccess(path: String, remoteHost: String): String? {
         return "Flashlight control has been disabled by Privacy Settings."
     }
 
-    // Log features: ONLY block log endpoints
-    if (isPathMatch(normPath, "/log", "/api/log") && !this.logEnabled) {
-        return "Log viewer has been disabled by Privacy Settings."
-    }
-
-    // Layout features: ONLY block layout endpoints
-    if (isPathMatch(normPath, "/layout") && !this.fileSystemEnabled) {
-        return "File layout access has been disabled by Privacy Settings."
-    }
-
     return null
 }

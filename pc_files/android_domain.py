@@ -8,6 +8,9 @@ class MyListener:
     def add_service(self, zc, type_, name):
         global opened
 
+        if "command-hub" not in name.lower():
+            return
+
         info = zc.get_service_info(type_, name)
 
         if info:

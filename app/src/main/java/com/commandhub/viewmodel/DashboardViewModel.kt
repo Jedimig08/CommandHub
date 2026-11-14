@@ -7,17 +7,32 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import com.commandhub.data.CommandHubContainer
 
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
-    val uartManager = UartManager(application)
-    val bluetoothManager = BluetoothClassicManager(application)
-    val cameraManager = CameraManager(application)
-    val sensorManager = SensorManager(application)
-    val tcpManager = TcpManager()
-    val hardwareManager = HardwareManager(application)
-    val privacyManager by lazy { server.privacyManager }
+    private val container = CommandHubContainer.getInstance(application)
+    val uartManager = container.uartManager
+    val bluetoothManager = container.bluetoothManager
+    val cameraManager = container.cameraManager
+    val sensorManager = container.sensorManager
+    val tcpManager = container.tcpManager
+    val hardwareManager = container.hardwareManager
+    val privacyManager = container.privacyManager
+    val authManager = container.authManager
+
+    private val server = container.server
+
+    var authToken by mutableStateOf(authManager.getToken())
+        private set
+
+    fun rotateAuthToken() {
+        mainHandler.post {
+            authToken = authManager.rotateToken()
+        }
+    }
 
     private val prefs = application.getSharedPreferences("dashboard_prefs", Context.MODE_PRIVATE)
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
     var keepScreenOn by mutableStateOf(prefs.getBoolean("keep_screen_on", true))
         private set
@@ -26,53 +41,41 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         private set
 
     fun updateProcessingUiUrl(url: String) {
-        processingUiUrl = url
-        prefs.edit { putString("processing_ui_url", url) }
+        mainHandler.post {
+            processingUiUrl = url
+            prefs.edit { putString("processing_ui_url", url) }
+        }
     }
 
     var sensorDelayFastest by mutableStateOf(prefs.getBoolean("sensor_delay_fastest", false))
         private set
 
     fun updateSensorDelayMode(fastest: Boolean) {
-        sensorDelayFastest = fastest
-        prefs.edit { putBoolean("sensor_delay_fastest", fastest) }
-        sensorManager.setSensorDelayMode(
-            if (fastest) android.hardware.SensorManager.SENSOR_DELAY_FASTEST
-            else android.hardware.SensorManager.SENSOR_DELAY_UI,
-        )
+        mainHandler.post {
+            sensorDelayFastest = fastest
+            prefs.edit { putBoolean("sensor_delay_fastest", fastest) }
+            sensorManager.setSensorDelayMode(
+                if (fastest) android.hardware.SensorManager.SENSOR_DELAY_FASTEST
+                else android.hardware.SensorManager.SENSOR_DELAY_UI,
+            )
+        }
     }
 
     fun setKeepScreenOnEnabled(enabled: Boolean) {
-        keepScreenOn = enabled
-        prefs.edit { putBoolean("keep_screen_on", enabled) }
+        mainHandler.post {
+            keepScreenOn = enabled
+            prefs.edit { putBoolean("keep_screen_on", enabled) }
+        }
     }
 
     fun publishDomain() {
-        server.registerService()
+        mainHandler.post {
+            server.registerService()
+        }
     }
 
-    private val server = DashboardServer(
-        context = application,
-        port = 8080,
-        layoutProvider = { "{}" },
-        getProcessingUrl = { processingUiUrl },
-        setProcessingUrl = { updateProcessingUiUrl(it) },
-        publishDomain = { publishDomain() },
-        getKeepScreenOn = { keepScreenOn },
-        setKeepScreenOnEnabled = { setKeepScreenOnEnabled(it) },
-        getSensorDelayFastest = { sensorDelayFastest },
-        updateSensorDelayMode = { updateSensorDelayMode(it) },
-        uartManager = uartManager,
-        bluetoothManager = bluetoothManager,
-        cameraManager = cameraManager,
-        sensorManager = sensorManager,
-        tcpManager = tcpManager,
-        hardwareManager = hardwareManager,
-    ) { _, _ -> }
-
     init {
-        server.start()
-        uartManager.connect()
+        // Server and managers managed via CommandHubContainer & CommandHubService
         if (sensorDelayFastest) {
             sensorManager.setSensorDelayMode(android.hardware.SensorManager.SENSOR_DELAY_FASTEST)
         }
@@ -80,13 +83,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     override fun onCleared() {
         super.onCleared()
-        server.stop()
-        uartManager.disconnect()
-        uartManager.unregister()
-        bluetoothManager.disconnect()
-        sensorManager.stopAll()
-        cameraManager.stopStreaming()
-        tcpManager.disconnect()
-        hardwareManager.stop()
+        // Activities can clear, but background service keeps server running persistently
     }
 }

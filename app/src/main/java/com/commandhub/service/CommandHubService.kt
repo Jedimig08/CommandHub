@@ -9,22 +9,10 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.commandhub.R
-import com.commandhub.viewmodel.BluetoothClassicManager
-import com.commandhub.viewmodel.CameraManager
-import com.commandhub.viewmodel.DashboardServer
-import com.commandhub.viewmodel.HardwareManager
-import com.commandhub.viewmodel.SensorManager
-import com.commandhub.viewmodel.TcpManager
-import com.commandhub.viewmodel.UartManager
+import com.commandhub.data.CommandHubContainer
 
 class CommandHubService : Service() {
-    private lateinit var server: DashboardServer
-    private lateinit var uartManager: UartManager
-    private lateinit var bluetoothManager: BluetoothClassicManager
-    private lateinit var cameraManager: CameraManager
-    private lateinit var sensorManager: SensorManager
-    private lateinit var tcpManager: TcpManager
-    private lateinit var hardwareManager: HardwareManager
+    private lateinit var container: CommandHubContainer
 
     companion object {
         const val CHANNEL_ID = "CommandHubServiceChannel"
@@ -33,29 +21,12 @@ class CommandHubService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        uartManager = UartManager(application)
-        bluetoothManager = BluetoothClassicManager(application)
-        cameraManager = CameraManager(application)
-        sensorManager = SensorManager(application)
-        tcpManager = TcpManager()
-        hardwareManager = HardwareManager(application)
-
-        server = DashboardServer(
-            context = application,
-            port = 8080,
-            layoutProvider = { "{}" },
-            uartManager = uartManager,
-            bluetoothManager = bluetoothManager,
-            cameraManager = cameraManager,
-            sensorManager = sensorManager,
-            tcpManager = tcpManager,
-            hardwareManager = hardwareManager,
-        ) { _, _ -> }
+        container = CommandHubContainer.getInstance(application)
 
         createNotificationChannel()
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("CommandHub Server Active")
-            .setContentText("Listening on port 8080 for remote clients")
+            .setContentText("Listening on port 8080 for remote clients (Secured)")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
             .build()
@@ -66,7 +37,8 @@ class CommandHubService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        server.start()
+        container.server.start()
+        container.uartManager.connect()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -77,14 +49,14 @@ class CommandHubService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        server.stop()
-        uartManager.disconnect()
-        uartManager.unregister()
-        bluetoothManager.disconnect()
-        sensorManager.stopAll()
-        cameraManager.stopStreaming()
-        tcpManager.disconnect()
-        hardwareManager.stop()
+        container.server.stop()
+        container.uartManager.disconnect()
+        container.uartManager.unregister()
+        container.bluetoothManager.disconnect()
+        container.sensorManager.stopAll()
+        container.cameraManager.stopStreaming()
+        container.tcpManager.disconnect()
+        container.hardwareManager.stop()
     }
 
     private fun createNotificationChannel() {
