@@ -92,6 +92,10 @@ class MainActivity : ComponentActivity() {
                     ActivityResultContracts.RequestPermission(),
                 ) { _ -> }
 
+                val bluetoothLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestMultiplePermissions(),
+                ) { _ -> }
+
                 LaunchedEffect(Unit) {
                     viewModel.cameraManager.setLifecycleOwner(this@MainActivity)
                     val cameraStatus = ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CAMERA)
@@ -105,6 +109,24 @@ class MainActivity : ComponentActivity() {
                         )
                         if (notificationStatus != PackageManager.PERMISSION_GRANTED) {
                             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val btConnectStatus = ContextCompat.checkSelfPermission(
+                            this@MainActivity,
+                            Manifest.permission.BLUETOOTH_CONNECT,
+                        )
+                        val btScanStatus = ContextCompat.checkSelfPermission(
+                            this@MainActivity,
+                            Manifest.permission.BLUETOOTH_SCAN,
+                        )
+                        if (btConnectStatus != PackageManager.PERMISSION_GRANTED || btScanStatus != PackageManager.PERMISSION_GRANTED) {
+                            bluetoothLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.BLUETOOTH_CONNECT,
+                                    Manifest.permission.BLUETOOTH_SCAN,
+                                )
+                            )
                         }
                     }
                 }

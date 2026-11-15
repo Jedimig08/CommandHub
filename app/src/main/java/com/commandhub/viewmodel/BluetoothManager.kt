@@ -5,6 +5,8 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
 import java.io.IOException
 import java.io.InputStream
@@ -17,10 +19,10 @@ import kotlinx.coroutines.flow.asSharedFlow
 
 data class PairedDeviceInfo(val name: String, val address: String)
 
-@SuppressLint("MissingPermission")
 class BluetoothClassicManager(context: Context) {
 
-    private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    private val appContext = context.applicationContext
+    private val bluetoothManager = appContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
 
     private var socket: BluetoothSocket? = null
@@ -39,9 +41,23 @@ class BluetoothClassicManager(context: Context) {
 
     var onDataReceived: ((String) -> Unit)? = null
 
+    @SuppressLint("MissingPermission")
     fun getPairedDevices(): List<PairedDeviceInfo> {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            appContext.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            Log.e("BT_CLASSIC", "BLUETOOTH_CONNECT permission not granted")
+            return emptyList()
+        }
+        if (bluetoothAdapter == null) {
+            Log.e("BT_CLASSIC", "Bluetooth adapter not available")
+            return emptyList()
+        }
+        if (!bluetoothAdapter.isEnabled) {
+            Log.w("BT_CLASSIC", "Bluetooth adapter is disabled")
+            return emptyList()
+        }
         return try {
-            bluetoothAdapter?.bondedDevices?.map { 
+            bluetoothAdapter.bondedDevices?.map {
                 PairedDeviceInfo(it.name ?: "Unknown", it.address)
             } ?: emptyList()
         } catch (e: SecurityException) {
@@ -50,8 +66,19 @@ class BluetoothClassicManager(context: Context) {
         }
     }
 
+    @SuppressLint("MissingPermission")
     fun connect(address: String): String {
-        val device = bluetoothAdapter?.getRemoteDevice(address) ?: return "Device not found"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            appContext.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            return "Connection failed: BLUETOOTH_CONNECT permission not granted"
+        }
+        if (bluetoothAdapter == null) {
+            return "Bluetooth adapter not available"
+        }
+        if (!bluetoothAdapter.isEnabled) {
+            return "Connection failed: Bluetooth is disabled"
+        }
+        val device = bluetoothAdapter.getRemoteDevice(address) ?: return "Device not found"
         
         return try {
             disconnect()
@@ -64,6 +91,9 @@ class BluetoothClassicManager(context: Context) {
             
             startReading()
             "Connected to ${device.name ?: address}"
+        } catch (e: SecurityException) {
+            Log.e("BT_CLASSIC", "SecurityException during connection", e)
+            "Connection failed: Security exception - permission denied (${e.message})"
         } catch (e: IOException) {
             Log.e("BT_CLASSIC", "Connection failed", e)
             "Connection failed: ${e.message}"
