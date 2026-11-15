@@ -117,9 +117,6 @@ class CommandHubUnitTest {
         assertTrue(state.uartEnabled)
         assertTrue(state.tcpEnabled)
         assertTrue(state.flashlightEnabled)
-        assertTrue(state.microphoneEnabled)
-        assertTrue(state.locationEnabled)
-        assertTrue(state.fileSystemEnabled)
     }
 
     @Test
@@ -142,9 +139,13 @@ class CommandHubUnitTest {
 
     @Test
     fun testAccessModeEvaluation() {
-        // ONLINE mode allows remote IP
+        // ONLINE mode allows remote IP, except privacy routes which stay loopback-only
         val onlineState = PrivacyState(accessMode = AccessMode.ONLINE)
         assertNull(onlineState.evaluateAccess("/camera", "192.168.1.50"))
+        assertNull(onlineState.evaluateAccess("/privacy", "127.0.0.1"))
+        assertNotNull(onlineState.evaluateAccess("/privacy", "192.168.1.50"))
+        assertNotNull(onlineState.evaluateAccess("/api/privacy/state", "192.168.1.50"))
+        assertNotNull(onlineState.evaluateAccess("/api/privacy/update", "192.168.1.50"))
 
         // LOCAL_ONLY mode blocks remote IP, permits loopback IP
         val localOnlyState = PrivacyState(accessMode = AccessMode.LOCAL_ONLY)

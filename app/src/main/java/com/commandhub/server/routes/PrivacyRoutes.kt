@@ -19,17 +19,6 @@ data class PrivacyUpdateRequest(
     val accessMode: AccessMode? = null,
     val feature: String? = null,
     val enabled: Boolean? = null,
-    val cameraEnabled: Boolean? = null,
-    val sensorsEnabled: Boolean? = null,
-    val hardwareEnabled: Boolean? = null,
-    val bluetoothEnabled: Boolean? = null,
-    val uartEnabled: Boolean? = null,
-    val tcpEnabled: Boolean? = null,
-    val flashlightEnabled: Boolean? = null,
-    val logEnabled: Boolean? = null,
-    val microphoneEnabled: Boolean? = null,
-    val locationEnabled: Boolean? = null,
-    val fileSystemEnabled: Boolean? = null,
 )
 
 fun Route.configurePrivacyRoutes(
@@ -47,34 +36,21 @@ fun Route.configurePrivacyRoutes(
     }
 
     post("/api/privacy/update") {
-        try {
-            val req = call.receive<PrivacyUpdateRequest>()
-            if (req.feature != null && req.enabled != null) {
-                privacyManager.setFeatureEnabled(req.feature, req.enabled)
-            }
-            if (req.accessMode != null) {
-                privacyManager.setAccessMode(req.accessMode)
-            }
-            if (req.feature == null && req.accessMode == null) {
-                val current = privacyManager.getState()
-                val updated = current.copy(
-                    cameraEnabled = req.cameraEnabled ?: current.cameraEnabled,
-                    sensorsEnabled = req.sensorsEnabled ?: current.sensorsEnabled,
-                    hardwareEnabled = req.hardwareEnabled ?: current.hardwareEnabled,
-                    bluetoothEnabled = req.bluetoothEnabled ?: current.bluetoothEnabled,
-                    uartEnabled = req.uartEnabled ?: current.uartEnabled,
-                    tcpEnabled = req.tcpEnabled ?: current.tcpEnabled,
-                    flashlightEnabled = req.flashlightEnabled ?: current.flashlightEnabled,
-                    logEnabled = req.logEnabled ?: current.logEnabled,
-                    microphoneEnabled = req.microphoneEnabled ?: current.microphoneEnabled,
-                    locationEnabled = req.locationEnabled ?: current.locationEnabled,
-                    fileSystemEnabled = req.fileSystemEnabled ?: current.fileSystemEnabled,
-                )
-                privacyManager.updateState(updated)
-            }
-            call.respond(privacyManager.getState())
-        } catch (e: Exception) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid privacy update request: ${e.message}"))
+        val req = try {
+            call.receive<PrivacyUpdateRequest>()
+        } catch (_: Exception) {
+            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid privacy update request"))
+            return@post
         }
+
+        val updated = when {
+            req.feature != null && req.enabled != null ->
+                privacyManager.setFeatureEnabled(req.feature, req.enabled)
+            req.accessMode != null ->
+                privacyManager.setAccessMode(req.accessMode)
+            else ->
+                privacyManager.getState()
+        }
+        call.respond(updated)
     }
 }

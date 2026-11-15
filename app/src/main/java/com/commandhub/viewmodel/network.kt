@@ -6,6 +6,8 @@ import android.util.Log
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import com.commandhub.data.PrivacyManager
 import com.commandhub.server.WebAssetLoader
@@ -65,6 +67,7 @@ class DashboardServer(
     private var nsdManager: NsdManager? = null
     private var multicastLock: WifiManager.MulticastLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private val privacyHandler = Handler(Looper.getMainLooper())
 
     private val serviceName = "command-hub"
     private val serviceType = "_http._tcp."
@@ -78,26 +81,24 @@ class DashboardServer(
     fun start() {
         registeredEndpoints.clear()
 
-        // Hook up privacy state changes to immediate stream/hardware teardowns
+        // Hook up privacy state changes to immediate stream/hardware teardowns.
+        // CameraX requires the main thread for unbind calls, and a failing teardown
+        // must never fail the request that triggered it.
         privacyManager.onPrivacyStateChanged = { state ->
-            val isOffline = state.accessMode == com.commandhub.data.AccessMode.OFFLINE
-            if (isOffline || !state.cameraEnabled) {
-                cameraManager.stopStreaming()
-            }
-            if (isOffline || !state.flashlightEnabled) {
-                cameraManager.setFlashlight(false)
-            }
-            if (isOffline || !state.sensorsEnabled) {
-                sensorManager.stopAll()
-            }
-            if (isOffline || !state.bluetoothEnabled) {
-                bluetoothManager.disconnect()
-            }
-            if (isOffline || !state.uartEnabled) {
-                uartManager.disconnect()
-            }
-            if (isOffline || !state.tcpEnabled) {
-                tcpManager.disconnect()
+            privacyHandler.post {
+                val isOffline = state.accessMode == com.commandhub.data.AccessMode.OFFLINE
+                runCatching { if (isOffline || !state.cameraEnabled) cameraManager.stopStreaming() }
+                    .onFailure { Log.e("DashboardServer", "Camera teardown failed", it) }
+                runCatching { if (isOffline || !state.flashlightEnabled) cameraManager.setFlashlight(false) }
+                    .onFailure { Log.e("DashboardServer", "Flashlight teardown failed", it) }
+                runCatching { if (isOffline || !state.sensorsEnabled) sensorManager.stopAll() }
+                    .onFailure { Log.e("DashboardServer", "Sensor teardown failed", it) }
+                runCatching { if (isOffline || !state.bluetoothEnabled) bluetoothManager.disconnect() }
+                    .onFailure { Log.e("DashboardServer", "Bluetooth teardown failed", it) }
+                runCatching { if (isOffline || !state.uartEnabled) uartManager.disconnect() }
+                    .onFailure { Log.e("DashboardServer", "UART teardown failed", it) }
+                runCatching { if (isOffline || !state.tcpEnabled) tcpManager.disconnect() }
+                    .onFailure { Log.e("DashboardServer", "TCP teardown failed", it) }
             }
         }
         privacyManager.onPrivacyStateChanged?.invoke(privacyManager.getState())

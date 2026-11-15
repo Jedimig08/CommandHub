@@ -17,6 +17,9 @@ fun Application.installPrivacyInterceptor(privacyManager: PrivacyManager) {
 
         val errorReason = privacyManager.evaluateAccess(path, remoteHost)
         if (errorReason != null) {
+            val isPrivacyPath = path == "/privacy" || path.startsWith("/api/privacy")
+            val backHref = if (isPrivacyPath) "/" else "/privacy"
+            val backLabel = if (isPrivacyPath) "Main Dashboard" else "Privacy Controls Page"
             val isJson = path.startsWith("/api/") || call.request.headers["Accept"]?.contains("application/json") == true
             if (isJson) {
                 call.respond(
@@ -46,7 +49,7 @@ fun Application.installPrivacyInterceptor(privacyManager: PrivacyManager) {
                             <h1>🛑 Privacy Access Blocked</h1>
                             <p><strong>Reason:</strong> ${escapeHtml(errorReason)}</p>
                             <p style="font-size: 0.85em; color: #64748b;">Endpoint: <code>${escapeHtml(path)}</code></p>
-                            <a href="/privacy">&larr; Go to Privacy Controls Page</a>
+                            <a href="$backHref">&larr; Go to $backLabel</a>
                         </div>
                     </body>
                     </html>

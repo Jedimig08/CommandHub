@@ -31,6 +31,7 @@
         <div>
             <h1>Privacy & Access Control</h1>
             <p>Manage real-time remote permissions & security rules</p>
+            <p style="font-size:0.8rem; color:#f59e0b; margin-top:6px;">Device-only page: reachable at 127.0.0.1 and never exposed to the network.</p>
         </div>
         <!--suppress HtmlUnknownTarget -->
         <a href="/" class="nav-link">&larr; Main Dashboard</a>
@@ -141,37 +142,44 @@
             });
         }
 
+        async function readState(res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const d = await res.json();
+            if (!d || typeof d.cameraEnabled !== 'boolean' || !d.accessMode) {
+                throw new Error('Unexpected server response');
+            }
+            return d;
+        }
+
         function loadPrivacyState() {
             fetch('/api/privacy/state')
-                .then(r => r.json())
-                .then(d => updateUI(d))
+                .then(readState)
+                .then(updateUI)
                 .catch(e => console.error('Error loading privacy state:', e));
         }
 
-        function setAccessMode(mode) {
+        function postUpdate(body) {
             fetch('/api/privacy/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CommandHub-Client': 'web' },
-                body: JSON.stringify({ accessMode: mode })
+                body: JSON.stringify(body)
             })
-            .then(r => r.json())
-            .then(d => updateUI(d))
-            .catch(e => alert('Failed to set access mode: ' + e));
+            .then(readState)
+            .then(updateUI)
+            .catch(e => {
+                alert('Failed to update privacy settings: ' + e.message);
+                loadPrivacyState();
+            });
+        }
+
+        function setAccessMode(mode) {
+            postUpdate({ accessMode: mode });
         }
 
         function toggleFeature(feature) {
             const btn = document.getElementById('btn' + feature.charAt(0).toUpperCase() + feature.slice(1));
             const isCurrentlyOn = btn && btn.classList.contains('on');
-            const targetVal = !isCurrentlyOn;
-
-            fetch('/api/privacy/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CommandHub-Client': 'web' },
-                body: JSON.stringify({ feature: feature, enabled: targetVal })
-            })
-            .then(r => r.json())
-            .then(d => updateUI(d))
-            .catch(e => alert('Failed to toggle feature: ' + e));
+            postUpdate({ feature: feature, enabled: !isCurrentlyOn });
         }
 
         window.onload = loadPrivacyState;

@@ -1,6 +1,7 @@
 package com.commandhub.data
 
 import android.content.Context
+import android.util.Log
 import androidx.core.content.edit
 import kotlinx.serialization.Serializable
 
@@ -21,10 +22,6 @@ data class PrivacyState(
     val uartEnabled: Boolean = true,
     val tcpEnabled: Boolean = true,
     val flashlightEnabled: Boolean = true,
-    val logEnabled: Boolean = true,
-    val microphoneEnabled: Boolean = true,
-    val locationEnabled: Boolean = true,
-    val fileSystemEnabled: Boolean = true,
 )
 
 class PrivacyManager(context: Context) {
@@ -52,10 +49,6 @@ class PrivacyManager(context: Context) {
             uartEnabled = prefs.getBoolean("uart_enabled", true),
             tcpEnabled = prefs.getBoolean("tcp_enabled", true),
             flashlightEnabled = prefs.getBoolean("flashlight_enabled", true),
-            logEnabled = prefs.getBoolean("log_enabled", true),
-            microphoneEnabled = prefs.getBoolean("microphone_enabled", true),
-            locationEnabled = prefs.getBoolean("location_enabled", true),
-            fileSystemEnabled = prefs.getBoolean("file_system_enabled", true),
         )
     }
 
@@ -74,10 +67,6 @@ class PrivacyManager(context: Context) {
             putBoolean("uart_enabled", newState.uartEnabled)
             putBoolean("tcp_enabled", newState.tcpEnabled)
             putBoolean("flashlight_enabled", newState.flashlightEnabled)
-            putBoolean("log_enabled", newState.logEnabled)
-            putBoolean("microphone_enabled", newState.microphoneEnabled)
-            putBoolean("location_enabled", newState.locationEnabled)
-            putBoolean("file_system_enabled", newState.fileSystemEnabled)
         }
         notifyStateChanged(newState)
     }
@@ -99,10 +88,6 @@ class PrivacyManager(context: Context) {
             "uart" -> currentState.copy(uartEnabled = enabled)
             "tcp" -> currentState.copy(tcpEnabled = enabled)
             "flashlight" -> currentState.copy(flashlightEnabled = enabled)
-            "log" -> currentState.copy(logEnabled = enabled)
-            "microphone" -> currentState.copy(microphoneEnabled = enabled)
-            "location" -> currentState.copy(locationEnabled = enabled)
-            "filesystem", "file_system" -> currentState.copy(fileSystemEnabled = enabled)
             else -> currentState
         }
         updateState(updated)
@@ -110,16 +95,12 @@ class PrivacyManager(context: Context) {
     }
 
     private fun notifyStateChanged(state: PrivacyState) {
-        onPrivacyStateChanged?.invoke(state)
-    }
-
-    fun isLoopbackAddress(host: String?): Boolean {
-        if (host == null) return false
-        val cleanHost = host.trim()
-        return cleanHost == "127.0.0.1" ||
-                cleanHost == "localhost" ||
-                cleanHost == "::1" ||
-                cleanHost == "0:0:0:0:0:0:0:1"
+        // A failing listener must never abort the state change or the HTTP response.
+        try {
+            onPrivacyStateChanged?.invoke(state)
+        } catch (e: Exception) {
+            Log.e("PrivacyManager", "Privacy state listener failed", e)
+        }
     }
 
     fun evaluateAccess(path: String, remoteHost: String): String? {
@@ -133,7 +114,8 @@ fun isLoopbackAddress(host: String?): Boolean {
     return cleanHost == "127.0.0.1" ||
             cleanHost == "localhost" ||
             cleanHost == "::1" ||
-            cleanHost == "0:0:0:0:0:0:0:1"
+            cleanHost == "0:0:0:0:0:0:0:1" ||
+            cleanHost.equals("::ffff:127.0.0.1", ignoreCase = true)
 }
 
 private fun isPathMatch(normPath: String, vararg targets: String): Boolean {
@@ -146,10 +128,10 @@ private fun isPathMatch(normPath: String, vararg targets: String): Boolean {
 fun PrivacyState.evaluateAccess(path: String, remoteHost: String): String? {
     val isLocal = isLoopbackAddress(remoteHost)
 
-    // Privacy management routes are accessible locally even if offline, so user can re-configure settings
+    // Privacy management is on-device only: never exposed to the network.
     if (path == "/privacy" || path.startsWith("/api/privacy")) {
-        if (!isLocal && this.accessMode != AccessMode.ONLINE) {
-            return "Privacy settings page is restricted to local on-device access while offline or local-only."
+        if (!isLocal) {
+            return "Privacy settings are only available on the device at 127.0.0.1."
         }
         return null
     }

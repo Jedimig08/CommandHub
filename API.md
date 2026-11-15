@@ -68,7 +68,8 @@ CommandHub registers itself over mDNS/DNS-SD so clients don't need to hard-code 
 - **`/api/*` routes** return `application/json` — meant for programs.
 - **WebSocket routes** stream UTF-8 text or binary frames.
 - **Access control** is handled by the Privacy & Access page. `ONLINE` allows any client
-  on the network, `LOCAL_ONLY` and `OFFLINE` reject non-loopback clients.
+  on the network, `LOCAL_ONLY` and `OFFLINE` reject non-loopback clients. The `/privacy`
+  page and all `/api/privacy/*` endpoints are always loopback-only.
 - **State-changing requests** from the bundled web UI include the `X-CommandHub-Client`
   header. No authentication is currently enforced.
 
@@ -96,7 +97,10 @@ against the saved access mode:
 | ------------ | ---------------------------- | --------------- |
 | `ONLINE`     | allowed                      | allowed         |
 | `LOCAL_ONLY` | allowed                      | blocked (403)   |
-| `OFFLINE`    | allowed for `/privacy` only  | blocked (403)   |
+| `OFFLINE`    | allowed                      | blocked (403)   |
+
+`/privacy` and `/api/privacy/*` are **always** loopback-only, in every access mode, so
+privacy settings can only be viewed or changed on the device itself.
 
 Individual feature toggles (camera, sensors, hardware, Bluetooth, UART, TCP, flashlight)
 also block their endpoints when disabled. Toggle them from `GET /privacy` or
@@ -118,16 +122,17 @@ Returns the Control Center web UI.
 
 ### `GET /privacy`
 
-Returns the Privacy & Access Control page.
+Returns the Privacy & Access Control page. Loopback-only in every access mode.
 
 ### `GET /api/privacy/state`
 
-Returns the current `PrivacyState` (access mode plus feature flags).
+Returns the current `PrivacyState` (access mode plus feature flags). Loopback-only in
+every access mode.
 
 ### `POST /api/privacy/update`
 
 Updates one feature flag or the access mode. Requires JSON or the
-`X-CommandHub-Client` header.
+`X-CommandHub-Client` header. Loopback-only in every access mode.
 
 ```json
 { "feature": "camera", "enabled": false }

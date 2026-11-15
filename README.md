@@ -204,7 +204,8 @@ schema, WebSocket frame format, and error code.
 
 > Authentication is currently disabled. Any device that can reach port 8080 can use the
 > controls; use the Privacy & Access page (`ONLINE`, `LOCAL_ONLY`, `OFFLINE`) to restrict
-> remote clients.
+> remote clients. The Privacy & Access page itself (`/privacy` and `/api/privacy/*`) is
+> always loopback-only and must be opened on the device.
 
 Example — watch a stream from Python:
 

@@ -35,7 +35,8 @@ reach port `8080` on the phone can:
 - Send data through UART, Bluetooth, and TCP sessions
 - Toggle the flashlight
 - Read battery, thermal, CPU, and memory telemetry
-- Read and change Privacy & Access settings while in `ONLINE` mode
+- Read and change Privacy & Access settings while in `ONLINE` mode (privacy routes are
+  always loopback-only, so this requires access to the device itself)
 
 The only remaining access control is the Privacy & Access page:
 
@@ -43,7 +44,10 @@ The only remaining access control is the Privacy & Access page:
 | ------------ | ----------------- | --------------------- |
 | `ONLINE`     | allowed           | allowed               |
 | `LOCAL_ONLY` | allowed           | blocked               |
-| `OFFLINE`    | allowed for `/privacy` only | blocked    |
+| `OFFLINE`    | allowed           | blocked               |
+
+`/privacy` and `/api/privacy/*` are **always** loopback-only, regardless of the access
+mode, so a remote client can never read or change privacy settings.
 
 Traffic is **plain HTTP**, so there is no confidentiality or integrity protection either.
 
@@ -52,7 +56,7 @@ Traffic is **plain HTTP**, so there is no confidentiality or integrity protectio
 - Run it on a **trusted, password-protected LAN**; avoid public or guest Wi-Fi.
 - Do **not** port-forward `8080` to the internet.
 - Use the Privacy & Access page to switch to `LOCAL_ONLY` or `OFFLINE` when remote access
-  is not needed. Remember that a remote client in `ONLINE` mode can change that setting.
+  is not needed. Privacy settings can only be changed on the device itself.
 - Consider a network that isolates IoT and development devices from your main LAN.
 - On Android, revoke permissions the app does not need if you are not using that
   subsystem.
