@@ -2,9 +2,19 @@
 
 - Repository: `Jedimig08/CommandHub`
 - Branch reviewed: `main`
-- Commit reviewed: `a1ee218` (2026-11-12)
+- Commit reviewed: `ca29e74` (2026-11-14)
 - Review type: static code review. No Gradle build/lint was run because the review machine had no JDK or Android SDK. Build-related findings still need confirmation with a clean build.
 - Purpose: prioritize what to fix first. This file does not change application code.
+
+## Fix branch status
+
+- Branch: `fix/auth-fgs`
+- Commit: `e325a27` — Harden auth, CSRF, privacy, and foreground service
+- Create PR: https://github.com/Jedimig08/CommandHub/pull/new/fix/auth-fgs
+- Resolved in this branch: P0-01, P0-02, P1-01, P1-02.
+- Partially addressed: P0-04 (privacy interceptor error-path escaping only).
+- Still open: P0-03, P0-04, P0-05, P0-06, P0-07, P1-03 onward.
+- Validation: static checks passed (`git diff --check`, manifest/HTML XML parsing, Kotlin brace check). Gradle build/lint and runtime device tests are still pending because no JDK/Android SDK is installed.
 
 ## Priority legend
 
@@ -18,7 +28,7 @@
 | Issue | Title | Priority | Main sections |
 |---|---|---|---|
 | #3 | Bluetooth terminal constant pinging | P1 | P1-13 |
-| #4 | Adding auth | P0 | P0-01, P0-02, P0-05 |
+| #4 | Adding auth | P0 | P0-01 (temporarily reverted), P0-02 (temporarily reverted), P0-05 |
 | #5 | The stream freezes | P1 | P1-03, P1-04, P1-05, P1-06 |
 | #6 | Privacy and access | P1 | P1-11, P1-12, P1-14 |
 | #7 | Microphone streaming | P3 | P3-01 |
@@ -27,19 +37,21 @@
 
 # P0 — Critical security and privacy
 
-## P0-01 — The entire HTTP/WebSocket API is unauthenticated
+## P0-01 — The entire HTTP/WebSocket API is unauthenticated (temporarily reverted)
 
-- **Evidence:** server binds `0.0.0.0` at `app/src/main/java/com/commandhub/viewmodel/network.kt:102`; public control routes include `CameraRoutes.kt:210`, `UartRoutes.kt:53`, `BluetoothRoutes.kt:89`, `TcpRoutes.kt:80`, `CoreRoutes.kt:62`; documented limitation in `SECURITY.md:28`.
-- **Impact:** anyone who can reach the phone can read camera/sensor data, toggle the torch, and send arbitrary data to UART, Bluetooth, and TCP.
-- **Fix:** add authentication middleware in front of all routes except `/pair`; generate a random token on first launch; support a session cookie and/or bearer token; add a pairing page; rate-limit auth attempts.
+- **Evidence (before fix):** server binds `0.0.0.0` at `app/src/main/java/com/commandhub/viewmodel/network.kt:102`; public control routes included `CameraRoutes.kt:210`, `UartRoutes.kt:53`, `BluetoothRoutes.kt:89`, `TcpRoutes.kt:80`, `CoreRoutes.kt:62`; documented limitation in `SECURITY.md:28`.
+- **Impact (before fix):** anyone who can reach the phone could read camera/sensor data, toggle the torch, and send arbitrary data to UART, Bluetooth, and TCP.
+- **Fix:** add authentication middleware in front of all routes except `/login` and `/pair`; generate a random token on first launch; support a session cookie and/or bearer token; add a pairing page; rate-limit auth attempts.
 - **Done when:** unauthenticated requests to `/stream/0`, `/camera-ws/0`, `/uart-send`, and `/api/flashlight/toggle` are rejected.
+- **Status:** auth was implemented in `e325a27` but has since been **temporarily removed** at the maintainer's request so the Privacy access modes can be exercised. The server is again reachable without credentials while the access mode is `ONLINE`.
 
-## P0-02 — No CSRF or Origin protection for state-changing requests
+## P0-02 — No CSRF or Origin protection for state-changing requests (temporarily reverted)
 
-- **Evidence:** simple POST endpoints accept empty or `text/plain` bodies, e.g. `FlashlightRoutes.kt:26`, `UartRoutes.kt:53`, `BluetoothRoutes.kt:89`, `TcpRoutes.kt:74`; `POST /api/settings/processing-url` also accepts a query-string fallback at `CoreRoutes.kt:62-72`.
-- **Impact:** a malicious website visited by someone on the LAN can trigger hardware actions with a cross-origin form POST.
+- **Evidence (before fix):** simple POST endpoints accepted empty or `text/plain` bodies, e.g. `FlashlightRoutes.kt:26`, `UartRoutes.kt:53`, `BluetoothRoutes.kt:89`, `TcpRoutes.kt:74`; `POST /api/settings/processing-url` also accepted a query-string fallback at `CoreRoutes.kt:62-72`.
+- **Impact (before fix):** a malicious website visited by someone on the LAN could trigger hardware actions with a cross-origin form POST.
 - **Fix:** validate `Origin`; require a custom header/token or a `SameSite=Strict` session cookie; reject wrong content types; test cross-origin form requests.
 - **Done when:** a cross-origin HTML form cannot toggle hardware or change settings.
+- **Status:** the Origin/CSRF checks lived in `AuthInterceptor`, which has been removed along with the rest of the auth stack, so they are currently inactive. Re-apply them when authentication is restored.
 
 ## P0-03 — WebView loads arbitrary external URLs with unsafe settings
 
@@ -57,10 +69,10 @@
 
 ## P0-05 — Arbitrary TCP connect creates an SSRF/pivot primitive
 
-- **Evidence:** `POST /tcp-connect` at `app/src/main/java/com/commandhub/server/routes/TcpRoutes.kt:80` calls `TcpManager.connect(ip, port)` at `TcpManager.kt:23` without auth or target restrictions.
-- **Impact:** an unauthenticated LAN client can make the phone connect to arbitrary local/private hosts and ports, then send data through the phone.
-- **Fix:** require authentication; add an optional allowlist/private-range policy; warn on non-private targets; rate-limit connections; add a connect timeout.
-- **Done when:** unauthenticated or disallowed targets are rejected.
+- **Evidence:** `POST /tcp-connect` at `app/src/main/java/com/commandhub/server/routes/TcpRoutes.kt:80` calls `TcpManager.connect(ip, port)` at `TcpManager.kt:23` without target restrictions. Authentication is currently disabled, so any client that can reach the server may use this endpoint.
+- **Impact:** an authenticated client can still make the phone connect to arbitrary local/private hosts and ports, then send data through the phone.
+- **Fix:** add an optional allowlist/private-range policy; warn on non-private targets; rate-limit connections; add a connect timeout.
+- **Done when:** disallowed targets are rejected.
 
 ## P0-06 — Unbounded request, frame, and camera parameters
 
@@ -80,18 +92,20 @@
 
 # P1 — High: lifecycle, reliability, and open issues
 
-## P1-01 — Foreground service is dead code; server lifetime is Activity-scoped
+## P1-01 — Foreground service is dead code; server lifetime is Activity-scoped (resolved)
 
-- **Evidence:** `service/CommandHubService.kt:20` exists and is declared in `AndroidManifest.xml:46-49`, but no code calls `startService`/`startForegroundService`. The real server starts in `DashboardViewModel.init` at `DashboardViewModel.kt:52-72`.
-- **Impact:** the server stops when the Activity/ViewModel is cleared; the advertised background server does not exist; remote streams freeze when the app leaves the foreground.
+- **Evidence (before fix):** `service/CommandHubService.kt:20` existed and was declared in `AndroidManifest.xml:46-49`, but no code called `startService`/`startForegroundService`. The real server started in `DashboardViewModel.init` at `DashboardViewModel.kt:52-72`.
+- **Impact (before fix):** the server stopped when the Activity/ViewModel was cleared; the advertised background server did not exist; remote streams froze when the app left the foreground.
 - **Fix:** create one application-scoped container; start exactly one server from a proper foreground service; keep the Activity as an observer/controller only.
 - **Done when:** the server can outlive Activity recreation and is explicitly started/stopped from the UI.
+- **Status:** resolved in `e325a27`. `CommandHubContainer` is application-scoped, `CommandHubService` owns the server, and the app Settings dialog can start/stop the background service.
 
-## P1-02 — Duplicate server and manager construction
+## P1-02 — Duplicate server and manager construction (resolved)
 
-- **Evidence:** `DashboardViewModel.kt:12-17` and `CommandHubService.kt:36-41` each create UART, Bluetooth, camera, sensor, TCP, and hardware managers; the service variant also uses `layoutProvider = { "{}" }` and a no-op log callback at `CommandHubService.kt:46-53`.
-- **Impact:** if the service is used, it creates a second server on port 8080 and a second set of hardware managers, splitting state and conflicting with the ViewModel.
+- **Evidence (before fix):** `DashboardViewModel.kt:12-17` and `CommandHubService.kt:36-41` each created UART, Bluetooth, camera, sensor, TCP, and hardware managers; the service variant also uses `layoutProvider = { "{}" }` and a no-op log callback at `CommandHubService.kt:46-53`.
+- **Impact (before fix):** using the service created a second server on port 8080 and a second set of hardware managers, splitting state and conflicting with the ViewModel.
 - **Fix:** remove the service copy or the ViewModel copy; inject the same managers into both; make the server construction single-owner.
+- **Status:** resolved in `e325a27`. `CommandHubContainer` provides one manager set and one server instance.
 
 ## P1-03 — Camera is bound to the Activity lifecycle
 
@@ -222,16 +236,16 @@
 
 - **Status:** Resolved in the documentation pass.
 - **Evidence:** README, `API.md`, `CONTRIBUTING.md`, and `CHANGELOG.md` now describe the
-  WebView Control Center, current packages/routes/settings/schemas, and the legacy
-  `/layout` route. The false IMU endpoint claim was removed.
+  WebView Control Center, current packages/routes/settings/schemas, auth, privacy, and the
+  foreground service. The false IMU endpoint and legacy `/layout` claims were removed.
 - **Impact:** docs no longer advertise removed features or deleted files.
 - **Fix:** keep docs updated in the same PR as API or behaviour changes.
 
-## P2-02 — `/api/log` and `/layout` are effectively dead
+## P2-02 — `/api/log` and `/layout` are effectively dead (resolved)
 
-- **Evidence:** `onLogReceived` is a no-op in `DashboardViewModel.kt:69` and `CommandHubService.kt:53`; `layoutProvider` always returns `"{}"` at `DashboardViewModel.kt:55` and `CommandHubService.kt:46`; `layout.json` is unused. README/API now mark `/layout` as legacy.
-- **Impact:** the legacy routes still do nothing, but they are no longer advertised as active features.
-- **Fix:** implement persistence and an update path, or remove the routes/pages.
+- **Status:** resolved. The `/log`, `/api/log`, and `/layout` routes and the `layout.json` /
+  `log.html` assets were removed.
+- **Impact:** no dead routes or misleading docs remain.
 
 ## P2-03 — Auto-generated endpoint index is unused
 
@@ -356,22 +370,21 @@ Do not start these until P0 and P1 are complete; they add new attack surface and
 
 # Recommended fix order
 
-1. **P0-01, P0-02, P0-05** — authentication, CSRF, and TCP target restrictions.
+1. **P0-05** — TCP target restrictions.
 2. **P0-03, P0-04** — WebView hardening and XSS escaping.
 3. **P0-06, P0-07** — input limits and privacy cleanup.
-4. **P1-01, P1-02, P1-15** — one server owner, one manager set, correct foreground service.
-5. **P1-03 through P1-07, P1-11, P1-12** — camera lifecycle, reconnect, rotation (issue #5), and capability/permission handling (issue #6).
-6. **P1-13** — remove PING and fix terminal heartbeat (issue #3).
-7. **P1-08, P1-09, P1-10, P1-20, P1-21** — serialization, NV21, SPS/PPS, sensors, IMU.
-8. **P1-14, P1-16 through P1-19** — permissions, wake lock, shutdown, transport I/O, hardware loop.
-9. **P2-02 through P2-16** — build, CI, tests, dead-code cleanup, and remaining docs.
-10. **P3-01** — microphone streaming (issue #7), after auth and lifecycle work.
+4. **P1-03 through P1-07, P1-11, P1-12** — camera lifecycle, reconnect, rotation (issue #5), and capability/permission handling (issue #6).
+5. **P1-13** — remove PING and fix terminal heartbeat (issue #3).
+6. **P1-08, P1-09, P1-10, P1-20, P1-21** — serialization, NV21, SPS/PPS, sensors, IMU.
+7. **P1-14, P1-16 through P1-19** — permissions, wake lock, shutdown, transport I/O, hardware loop.
+8. **P2-02 through P2-16** — build, CI, tests, dead-code cleanup, and remaining docs.
+9. **P3-01** — microphone streaming (issue #7), after auth and lifecycle work.
 
 ## Suggested PR sequence
 
-1. Auth + CSRF + input limits.
+1. Input limits + TCP target restrictions.
 2. WebView/XSS hardening.
-3. Single server owner + foreground service + camera lifecycle.
+3. Camera lifecycle on top of the existing single server owner + foreground service.
 4. WebSocket reconnect + rotation + PING fix (issues #5 and #3).
 5. Correctness: DTOs, NV21, SPS/PPS, sensors, IMU.
 6. Capability detection + lazy permissions (issue #6).

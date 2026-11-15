@@ -11,7 +11,6 @@ import com.commandhub.viewmodel.UartManager
 
 class CommandHubContainer(context: Context) {
     private val appContext = context.applicationContext
-    val authManager = AuthManager(appContext)
     val privacyManager = PrivacyManager(appContext)
     val uartManager = UartManager(appContext)
     val bluetoothManager = BluetoothClassicManager(appContext)
@@ -34,7 +33,6 @@ class CommandHubContainer(context: Context) {
             tcpManager = tcpManager,
             hardwareManager = hardwareManager,
             privacyManager = privacyManager,
-            authManager = authManager,
             getProcessingUrl = { settingsManager.processingUiUrl },
             setProcessingUrl = { settingsManager.updateProcessingUiUrl(it) },
             publishDomain = { server.registerService() },

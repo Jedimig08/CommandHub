@@ -1,9 +1,6 @@
 package com.commandhub.viewmodel
 
 import android.app.Application
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import com.commandhub.data.CommandHubContainer
 
@@ -16,19 +13,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     val tcpManager = container.tcpManager
     val hardwareManager = container.hardwareManager
     val privacyManager = container.privacyManager
-    val authManager = container.authManager
     val settingsManager = container.settingsManager
 
     private val server = container.server
-
-    var authToken by mutableStateOf(authManager.getToken())
-        private set
-
-    fun rotateAuthToken() {
-        mainHandler.post {
-            authToken = authManager.rotateToken()
-        }
-    }
 
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 

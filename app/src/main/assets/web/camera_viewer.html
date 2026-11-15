@@ -108,18 +108,18 @@
         async function updateZoom(val) {
             document.getElementById('zoomVal').innerText = val + 'x';
             try {
-                await fetch('/api/camera/control?zoom=' + val, { method: 'POST' });
+                await fetch('/api/camera/control?zoom=' + val, { method: 'POST', headers: { 'X-CommandHub-Client': 'web' } });
             } catch (e) {}
         }
         async function updateExposure(val) {
             document.getElementById('expVal').innerText = val;
             try {
-                await fetch('/api/camera/control?exposure=' + val, { method: 'POST' });
+                await fetch('/api/camera/control?exposure=' + val, { method: 'POST', headers: { 'X-CommandHub-Client': 'web' } });
             } catch (e) {}
         }
         async function toggleFlashlight() {
             try {
-                const res = await fetch('/api/flashlight/toggle', { method: 'POST' });
+                const res = await fetch('/api/flashlight/toggle', { method: 'POST', headers: { 'X-CommandHub-Client': 'web' } });
                 const data = await res.json();
                 const btn = document.getElementById('flashBtn');
                 if (btn) btn.style.background = data.enabled ? '#34C759' : '#FF9500';

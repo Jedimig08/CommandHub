@@ -44,8 +44,8 @@ fun Application.installPrivacyInterceptor(privacyManager: PrivacyManager) {
                     <body>
                         <div class="card">
                             <h1>🛑 Privacy Access Blocked</h1>
-                            <p><strong>Reason:</strong> $errorReason</p>
-                            <p style="font-size: 0.85em; color: #64748b;">Endpoint: <code>$path</code></p>
+                            <p><strong>Reason:</strong> ${escapeHtml(errorReason)}</p>
+                            <p style="font-size: 0.85em; color: #64748b;">Endpoint: <code>${escapeHtml(path)}</code></p>
                             <a href="/privacy">&larr; Go to Privacy Controls Page</a>
                         </div>
                     </body>
@@ -59,3 +59,10 @@ fun Application.installPrivacyInterceptor(privacyManager: PrivacyManager) {
         }
     }
 }
+
+private fun escapeHtml(value: String): String = value
+    .replace("&", "&amp;")
+    .replace("<", "&lt;")
+    .replace(">", "&gt;")
+    .replace("\"", "&quot;")
+    .replace("'", "&#39;")

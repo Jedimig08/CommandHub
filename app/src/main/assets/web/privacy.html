@@ -114,42 +114,6 @@
             <button class="toggle-btn" id="btnFlashlight" onclick="toggleFeature('flashlight')">Loading...</button>
         </div>
 
-        <div class="setting-row">
-            <div class="setting-info">
-                <span class="setting-title">Log & Terminal Viewer</span>
-                <span class="setting-desc">Remote debug log receiver and viewer</span>
-            </div>
-            <button class="toggle-btn" id="btnLog" onclick="toggleFeature('log')">Loading...</button>
-        </div>
-    </div>
-
-    <!-- Hardware Permission Controls -->
-    <div class="section">
-        <h3>🔒 Hardware & Storage Permission Locks</h3>
-
-        <div class="setting-row">
-            <div class="setting-info">
-                <span class="setting-title">Microphone / Audio Access</span>
-                <span class="setting-desc">Block audio capture and audio streaming triggers</span>
-            </div>
-            <button class="toggle-btn" id="btnMicrophone" onclick="toggleFeature('microphone')">Loading...</button>
-        </div>
-
-        <div class="setting-row">
-            <div class="setting-info">
-                <span class="setting-title">Location Telemetry</span>
-                <span class="setting-desc">Block location services and GPS coordinates</span>
-            </div>
-            <button class="toggle-btn" id="btnLocation" onclick="toggleFeature('location')">Loading...</button>
-        </div>
-
-        <div class="setting-row">
-            <div class="setting-info">
-                <span class="setting-title">File System & Layout Config</span>
-                <span class="setting-desc">Block internal layout JSON loading and file storage access</span>
-            </div>
-            <button class="toggle-btn" id="btnFileSystem" onclick="toggleFeature('filesystem')">Loading...</button>
-        </div>
     </div>
 
     <script>
@@ -165,11 +129,7 @@
                 { id: 'btnBluetooth', val: state.bluetoothEnabled },
                 { id: 'btnUart', val: state.uartEnabled },
                 { id: 'btnTcp', val: state.tcpEnabled },
-                { id: 'btnFlashlight', val: state.flashlightEnabled },
-                { id: 'btnLog', val: state.logEnabled },
-                { id: 'btnMicrophone', val: state.microphoneEnabled },
-                { id: 'btnLocation', val: state.locationEnabled },
-                { id: 'btnFileSystem', val: state.fileSystemEnabled }
+                { id: 'btnFlashlight', val: state.flashlightEnabled }
             ];
 
             features.forEach(f => {
@@ -191,7 +151,7 @@
         function setAccessMode(mode) {
             fetch('/api/privacy/update', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CommandHub-Client': 'web' },
                 body: JSON.stringify({ accessMode: mode })
             })
             .then(r => r.json())
@@ -206,7 +166,7 @@
 
             fetch('/api/privacy/update', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CommandHub-Client': 'web' },
                 body: JSON.stringify({ feature: feature, enabled: targetVal })
             })
             .then(r => r.json())

@@ -11,7 +11,7 @@ import androidx.core.app.NotificationCompat
 import com.commandhub.data.CommandHubContainer
 
 class CommandHubService : Service() {
-    private lateinit var container: CommandHubContainer
+    private var container: CommandHubContainer? = null
 
     companion object {
         const val CHANNEL_ID = "CommandHubServiceChannel"
@@ -20,7 +20,6 @@ class CommandHubService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        container = CommandHubContainer.getInstance(application)
 
         createNotificationChannel()
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -30,14 +29,20 @@ class CommandHubService : Service() {
             .setOngoing(true)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        container.server.start()
-        container.uartManager.connect()
+        val activeContainer = CommandHubContainer.getInstance(application)
+        container = activeContainer
+        activeContainer.server.start()
+        activeContainer.uartManager.connect()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -48,14 +53,16 @@ class CommandHubService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        container.server.stop()
-        container.uartManager.disconnect()
-        container.uartManager.unregister()
-        container.bluetoothManager.disconnect()
-        container.sensorManager.stopAll()
-        container.cameraManager.stopStreaming()
-        container.tcpManager.disconnect()
-        container.hardwareManager.stop()
+        container?.let { activeContainer ->
+            activeContainer.server.stop()
+            activeContainer.uartManager.disconnect()
+            activeContainer.bluetoothManager.disconnect()
+            activeContainer.sensorManager.stopAll()
+            activeContainer.cameraManager.stopStreaming()
+            activeContainer.tcpManager.disconnect()
+            activeContainer.hardwareManager.stop()
+        }
+        container = null
     }
 
     private fun createNotificationChannel() {

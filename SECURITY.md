@@ -25,30 +25,40 @@ Include as much as you can of:
 I will acknowledge the report, investigate it, and credit you in the fix unless you
 prefer otherwise.
 
-## Known design limitation: no authentication
+## Authentication and transport security
 
-The embedded Ktor server binds to `0.0.0.0:8080` and has **no authentication or
-authorization**. Any host that can reach the phone's IP address can:
+Authentication is currently **disabled** for development. The embedded Ktor server binds
+to `0.0.0.0:8080` and does not require a token, password, or session. Any device that can
+reach port `8080` on the phone can:
 
 - Read live camera streams and sensor data
 - Send data through UART, Bluetooth, and TCP sessions
 - Toggle the flashlight
 - Read battery, thermal, CPU, and memory telemetry
+- Read and change Privacy & Access settings while in `ONLINE` mode
 
-This is a **known limitation, not an accidental oversight**. CommandHub is designed for
-use on trusted local networks — a home lab, workshop, or robotics bench — and is not
-meant to be exposed to the public internet.
+The only remaining access control is the Privacy & Access page:
+
+| Mode         | On-device WebView | Other network clients |
+| ------------ | ----------------- | --------------------- |
+| `ONLINE`     | allowed           | allowed               |
+| `LOCAL_ONLY` | allowed           | blocked               |
+| `OFFLINE`    | allowed for `/privacy` only | blocked    |
+
+Traffic is **plain HTTP**, so there is no confidentiality or integrity protection either.
 
 ### Mitigations you should take
 
 - Run it on a **trusted, password-protected LAN**; avoid public or guest Wi-Fi.
 - Do **not** port-forward `8080` to the internet.
+- Use the Privacy & Access page to switch to `LOCAL_ONLY` or `OFFLINE` when remote access
+  is not needed. Remember that a remote client in `ONLINE` mode can change that setting.
 - Consider a network that isolates IoT and development devices from your main LAN.
 - On Android, revoke permissions the app does not need if you are not using that
   subsystem.
 
 ### Planned work
 
-Adding authentication and access control is tracked in
-[issue #4](https://github.com/Jedimig08/CommandHub/issues/4). Contributions toward it
-are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+Re-introducing authentication and adding TLS/HTTPS are planned before any public or
+untrusted-network use. See [COMMANDHUB_PROBLEMS_PRIORITY.md](COMMANDHUB_PROBLEMS_PRIORITY.md)
+for the current security backlog.

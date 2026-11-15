@@ -16,9 +16,6 @@ import kotlinx.serialization.Serializable
 data class ProcessingUrlRequest(val url: String = "")
 
 @Serializable
-data class LoginRequest(val token: String = "")
-
-@Serializable
 data class SettingsStateResponse(
     val screenOn: Boolean,
     val sensorFastest: Boolean,
@@ -67,7 +64,6 @@ fun getDeviceIpAddress(context: Context): String {
 
 fun Route.configureCoreRoutes(
     assetLoader: WebAssetLoader,
-    authManager: com.commandhub.data.AuthManager,
     context: Context,
     getProcessingUrl: () -> String = { "" },
     setProcessingUrl: (String) -> Unit = {},
@@ -79,74 +75,6 @@ fun Route.configureCoreRoutes(
     registeredEndpoints: List<Pair<String, String>>,
     register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
 ) {
-    get("/login") {
-        val html = assetLoader.load("login.html", emptyMap())
-        call.respondText(html, ContentType.Text.Html)
-    }
-
-    post("/login") {
-        val remoteHost = call.request.local.remoteHost
-        if (!authManager.checkRateLimit(remoteHost)) {
-            call.respond(io.ktor.http.HttpStatusCode.TooManyRequests, mapOf("error" to "Too many failed attempts. Locked out temporarily."))
-            return@post
-        }
-        try {
-            val req = call.receive<LoginRequest>()
-            if (authManager.validateBearerToken(req.token)) {
-                authManager.clearFailedAttempts(remoteHost)
-                val sessionId = authManager.createSession()
-                call.response.cookies.append(
-                    io.ktor.http.Cookie(
-                        name = "session_id",
-                        value = sessionId,
-                        httpOnly = true,
-                        secure = false,
-                        extensions = mapOf("SameSite" to "Strict"),
-                        path = "/"
-                    )
-                )
-                call.respond(mapOf("status" to "success", "message" to "Authenticated successfully"))
-            } else {
-                authManager.recordFailedAttempt(remoteHost)
-                call.respond(io.ktor.http.HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
-            }
-        } catch (_: Exception) {
-            authManager.recordFailedAttempt(remoteHost)
-            call.respond(io.ktor.http.HttpStatusCode.BadRequest, mapOf("error" to "Invalid request"))
-        }
-    }
-
-    post("/pair") {
-        val remoteHost = call.request.local.remoteHost
-        if (!authManager.checkRateLimit(remoteHost)) {
-            call.respond(io.ktor.http.HttpStatusCode.TooManyRequests, mapOf("error" to "Too many attempts. Locked out temporarily."))
-            return@post
-        }
-        try {
-            val req = call.receive<LoginRequest>()
-            if (authManager.validateBearerToken(req.token)) {
-                authManager.clearFailedAttempts(remoteHost)
-                val sessionId = authManager.createSession()
-                call.response.cookies.append(
-                    io.ktor.http.Cookie(
-                        name = "session_id",
-                        value = sessionId,
-                        httpOnly = true,
-                        secure = false,
-                        extensions = mapOf("SameSite" to "Strict"),
-                        path = "/"
-                    )
-                )
-                call.respond(mapOf("status" to "success", "paired" to true))
-            } else {
-                authManager.recordFailedAttempt(remoteHost)
-                call.respond(io.ktor.http.HttpStatusCode.Unauthorized, mapOf("error" to "Invalid pairing token"))
-            }
-        } catch (_: Exception) {
-            authManager.recordFailedAttempt(remoteHost)
-            call.respond(io.ktor.http.HttpStatusCode.BadRequest, mapOf("error" to "Invalid request"))
-        }
-    }
     get("/api/settings/state") {
         val ip = getDeviceIpAddress(context)
         call.respond(

@@ -192,7 +192,7 @@ schema, WebSocket frame format, and error code.
 
 | Subsystem  | Key endpoints                                                              |
 | ---------- | -------------------------------------------------------------------------- |
-| Core       | `GET /`, `GET /log`, `POST /api/log`                                       |
+| Core       | `GET /`, `GET /privacy`, `GET /api/privacy/state`, `POST /api/privacy/update` |
 | Settings   | `GET /api/settings/state`, `GET/POST /api/settings/processing-url`, `POST /api/settings/publish-domain`, `POST /api/settings/screen-on/toggle`, `POST /api/settings/sensors-speed/toggle` |
 | Camera     | `GET /camera`, `GET /camera/{id}`, `GET /api/cameras`, `GET /stream/{id}`, `WS /camera-ws/{id}`, `WS /h264-ws/{id}`, `GET /api/camera/stats`, `POST /api/camera/control` |
 | Sensors    | `GET /sensors`, `GET /sensors/{type}`, `GET /api/sensors`, `GET /api/sensors/{type}`, `WS /sensors-ws/{type}` |
@@ -202,8 +202,9 @@ schema, WebSocket frame format, and error code.
 | Bluetooth  | `GET /bluetooth`, `WS /bluetooth-ws`, `POST /bluetooth-send`, `POST /bluetooth-connect` |
 | TCP        | `GET /tcp`, `WS /tcp-ws`, `POST /tcp-send`, `POST /tcp-connect`            |
 
-> The legacy `GET /layout` route still exists for compatibility, but the current WebView
-> Control Center does not load `assets/layout.json`.
+> Authentication is currently disabled. Any device that can reach port 8080 can use the
+> controls; use the Privacy & Access page (`ONLINE`, `LOCAL_ONLY`, `OFFLINE`) to restrict
+> remote clients.
 
 Example — watch a stream from Python:
 
@@ -218,9 +219,10 @@ while True:
         break
 ```
 
-> ⚠️ **The server has no authentication.** Anyone on your network can read the camera
-> streams and drive the attached hardware. Use it only on trusted networks. See
-> [SECURITY.md](SECURITY.md) and [issue #4](https://github.com/Jedimig08/CommandHub/issues/4).
+> 🔓 **Authentication is currently disabled.** Any device on the network can drive the
+> phone when the access mode is `ONLINE`. Switch the Privacy & Access page to `LOCAL_ONLY`
+> or `OFFLINE` to block remote clients, and only use CommandHub on trusted local networks.
+> Traffic is plain HTTP. See [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -276,8 +278,9 @@ separated into their own packages.
   Browser / WebView Control Center
 ```
 
-`service/CommandHubService.kt` is a foreground-service scaffold. The current UI starts the
-server from `DashboardViewModel`; it does not start the service.
+`service/CommandHubService.kt` is a persistent foreground service. `MainActivity` starts it
+on launch (unless the user disables the background-server setting), and the service owns the
+Ktor server plus hardware managers. The foreground notification uses the `specialUse` type.
 
 ### Packages
 
@@ -287,7 +290,8 @@ server from `DashboardViewModel`; it does not start the service.
 | `viewmodel/`       | `DashboardViewModel`, `DashboardServer` (`network.kt`), and one manager per hardware subsystem |
 | `server/`          | Ktor setup, `WebAssetLoader`, and the route modules                    |
 | `server/routes/`   | One file per subsystem — the source of truth for [API.md](API.md)     |
-| `service/`         | `CommandHubService` foreground-service scaffold (not started by the current UI) |
+| `data/`            | `PrivacyManager`, `SettingsManager`, and the `CommandHubContainer` DI singleton |
+| `service/`         | `CommandHubService` persistent foreground service                  |
 
 ### UI
 
@@ -296,15 +300,17 @@ at `http://127.0.0.1:8080/`. Jetpack Compose is used only for the Android shell 
 theme; the Control Center itself is HTML/CSS/JS. This keeps the UI editable without
 rebuilding the APK. The WebView enables JavaScript and DOM storage, applies the saved
 keep-screen-awake setting, and injects a floating home button when navigating to an
-external processing UI.
+external processing UI. A native **Settings** dialog can start or stop the background
+server.
 
 ### State and Persistence
 
-There is no `data/` package in the current codebase. App settings such as keep-screen-on,
-sensor delay mode, and the processing-UI URL live in `SharedPreferences` and are exposed
-through the settings API. Terminal macros are stored in the browser's `localStorage`. The
-old JSON layout repository and `layout.json` are legacy and are not loaded by the current
-WebView UI.
+The `data/` package holds `PrivacyManager` (access mode and feature flags),
+`SettingsManager` (UI preferences), and `CommandHubContainer` (process-wide manager/server
+singleton). App settings such as keep-screen-on, sensor delay mode, and the
+processing-UI URL live in `SharedPreferences` and are exposed through the settings API.
+Terminal macros are stored in the browser's `localStorage`. The old JSON layout repository
+and `layout.json` have been removed.
 
 ### Hardware Managers
 
@@ -325,8 +331,8 @@ its own manager class:
   wires up every route module, manages mDNS registration, and holds the Wi-Fi multicast
   lock. Route logic itself lives in `server/routes/`, not here.
 
-`service/CommandHubService.kt` is a foreground-service scaffold and is not started by the
-current UI.
+`service/CommandHubService.kt` is the persistent foreground service that starts and stops
+the server and hardware managers.
 
 Keeping these systems independent improves maintainability while making it easier to add
 support for additional communication protocols and hardware features in future versions.
@@ -339,7 +345,7 @@ delegates each subsystem to a module in `server/routes/`:
 
 | Route module       | Mounted paths                                   |
 | ------------------ | ----------------------------------------------- |
-| `CoreRoutes.kt`    | `/`, `/layout` (legacy), `/log`, `/api/log`, `/api/settings/*` |
+| `CoreRoutes.kt`    | `/`, `/api/settings/*`                          |
 | `CameraRoutes.kt`  | `/camera`, `/camera/{id}`, `/stream/{id}`, `/api/cameras`, `/api/camera/stats`, `/api/camera/control`, `/camera-ws/{id}`, `/h264-ws/{id}` |
 | `SensorRoutes.kt`  | `/sensors`, `/sensors/{type}`, `/api/sensors`, `/api/sensors/{type}`, `/sensors-ws/{type}` |
 | `HardwareRoutes.kt`| `/hardware`, `/api/hardware`                    |
@@ -347,6 +353,7 @@ delegates each subsystem to a module in `server/routes/`:
 | `UartRoutes.kt`    | `/uart`, `/uart-ws`, `/uart-send`               |
 | `BluetoothRoutes.kt` | `/bluetooth`, `/bluetooth-ws`, `/bluetooth-send`, `/bluetooth-connect` |
 | `TcpRoutes.kt`     | `/tcp`, `/tcp-ws`, `/tcp-send`, `/tcp-connect`  |
+| `PrivacyRoutes.kt` | `/privacy`, `/api/privacy/state`, `/api/privacy/update` |
 
 Each module registers its routes through a shared `register(path, name)` helper.
 
@@ -355,7 +362,6 @@ Each module registers its routes through a shared `register(path, name)` helper.
 - `assets/web/*.html` — templates for every web page, filled in by `WebAssetLoader`
   using `{{placeholder}}` substitution. Keeping pages in `assets/` means they can be
   edited without touching Kotlin code.
-- `assets/layout.json` is a legacy file and is not loaded by the current WebView UI.
 
 ---
 
@@ -368,7 +374,7 @@ Jetpack Compose is still used for the thin Android shell and theme.
 
 **No JSON layout engine.** The earlier JSON-driven Compose dashboard and layout repository
 were removed. The current UI is a WebView Control Center with static module cards and a
-small settings API; `layout.json` is no longer loaded.
+small settings API.
 
 **Separate manager classes per subsystem.** Rather than placing Bluetooth, USB,
 networking, and camera logic inside a single large activity, each subsystem has its own
@@ -404,7 +410,7 @@ read in isolation.
 | `viewmodel/SensorManager.kt`    | Onboard sensor access and sampling modes            |
 | `viewmodel/TcpManager.kt`       | TCP client connections and link metrics           |
 | `viewmodel/HardwareManager.kt`  | Battery, thermal, CPU, and RAM telemetry           |
-| `service/CommandHubService.kt`  | Foreground-service scaffold (not started by the current UI) |
+| `service/CommandHubService.kt`  | Persistent foreground service that owns the server and managers |
 | `assets/web/*.html`             | Control Center pages, camera/sensor viewers, and terminals |
 | `pc_files/android_domain.py`    | mDNS discovery helper for desktop clients         |
 
@@ -485,9 +491,9 @@ JPEG-over-WebSocket, with H.264 exposed for clients that can decode it.
 
 A full, prioritized list of current problems — with evidence, impact, recommended fixes, and acceptance criteria — lives in **[COMMANDHUB_PROBLEMS_PRIORITY.md](COMMANDHUB_PROBLEMS_PRIORITY.md)**.
 
-The highest-priority items are:
+Authentication is currently disabled in favour of the Privacy & Access modes. The
+highest-priority remaining items are:
 
-- **Authentication and access control** for the embedded server ([issue #4](https://github.com/Jedimig08/CommandHub/issues/4))
 - **Camera stream freezing after rotation** and missing WebSocket reconnect ([issue #5](https://github.com/Jedimig08/CommandHub/issues/5))
 - **Terminal heartbeat being forwarded to Bluetooth/UART/TCP devices** ([issue #3](https://github.com/Jedimig08/CommandHub/issues/3))
 - **Unavailable hardware modules still appearing in the UI** and camera permission failures affecting other modules ([issue #6](https://github.com/Jedimig08/CommandHub/issues/6))
@@ -499,8 +505,6 @@ The file also covers the server lifecycle, camera concurrency, input validation,
 
 Although the current version is functional, several improvements are planned:
 
-- **Authentication and access control** for the embedded server
-  ([issue #4](https://github.com/Jedimig08/CommandHub/issues/4))
 - Camera lifecycle and WebSocket reconnect fixes
   ([issue #5](https://github.com/Jedimig08/CommandHub/issues/5))
 - Capability detection and permission handling for unavailable modules

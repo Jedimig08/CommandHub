@@ -4,9 +4,11 @@ CommandHub embeds a [Ktor](https://ktor.io/) CIO server inside the Android app. 
 device on the same local network can drive the phone's cameras, sensors, and attached
 hardware over plain HTTP and WebSockets.
 
-> **Security notice.** The server binds to `0.0.0.0:8080` and has **no authentication**.
-> Anyone who can reach the phone's IP can read camera streams, send data to connected
-> devices, and toggle hardware. It is intended for **trusted local networks only**.
+> **Security notice.** Authentication is currently **disabled**. The server binds to
+> `0.0.0.0:8080` and any device that can reach it can drive the phone's cameras, sensors,
+> and attached hardware. Use the Privacy & Access page (`ONLINE`, `LOCAL_ONLY`, `OFFLINE`)
+> to limit remote access, and only run CommandHub on a trusted local network. Traffic is
+> plain HTTP.
 
 ---
 
@@ -15,7 +17,9 @@ hardware over plain HTTP and WebSockets.
 - [Base URL](#base-url)
 - [Service Discovery](#service-discovery)
 - [Conventions](#conventions)
+- [Access Control](#access-control)
 - [Core](#core)
+- [Privacy](#privacy)
 - [Settings](#settings)
 - [Camera](#camera)
 - [Sensors](#sensors)
@@ -42,7 +46,7 @@ http://<phone-ip>:8080
 | Port      | `8080` (default)          |
 | Protocol  | HTTP/1.1 + WebSocket      |
 | Encoding  | UTF-8                     |
-| Auth      | None                      |
+| Auth      | None (see Privacy access modes) |
 
 ---
 
@@ -63,6 +67,10 @@ CommandHub registers itself over mDNS/DNS-SD so clients don't need to hard-code 
 - **HTML routes** return `text/html` — pages meant for a browser.
 - **`/api/*` routes** return `application/json` — meant for programs.
 - **WebSocket routes** stream UTF-8 text or binary frames.
+- **Access control** is handled by the Privacy & Access page. `ONLINE` allows any client
+  on the network, `LOCAL_ONLY` and `OFFLINE` reject non-loopback clients.
+- **State-changing requests** from the bundled web UI include the `X-CommandHub-Client`
+  header. No authentication is currently enforced.
 
 ### Common query parameters
 
@@ -79,6 +87,23 @@ Camera and stream routes share a common set of query parameters:
 
 ---
 
+## Access Control
+
+There is no login or bearer token anymore. `PrivacyManager` evaluates every request
+against the saved access mode:
+
+| Mode         | Loopback (on-device WebView) | Network clients |
+| ------------ | ---------------------------- | --------------- |
+| `ONLINE`     | allowed                      | allowed         |
+| `LOCAL_ONLY` | allowed                      | blocked (403)   |
+| `OFFLINE`    | allowed for `/privacy` only  | blocked (403)   |
+
+Individual feature toggles (camera, sensors, hardware, Bluetooth, UART, TCP, flashlight)
+also block their endpoints when disabled. Toggle them from `GET /privacy` or
+`POST /api/privacy/update`.
+
+---
+
 ## Core
 
 ### `GET /`
@@ -87,22 +112,32 @@ Returns the Control Center web UI.
 
 **Response:** `200 text/html`
 
-### `GET /log`
+---
 
-Returns the dashboard logger page.
+## Privacy
 
-**Response:** `200 text/html`
+### `GET /privacy`
 
-### `GET /layout` (legacy)
+Returns the Privacy & Access Control page.
 
-Returns `{}`. The current WebView UI does not load `assets/layout.json`; this route is
-kept for compatibility with older clients.
+### `GET /api/privacy/state`
 
-**Response:** `200 application/json`
+Returns the current `PrivacyState` (access mode plus feature flags).
 
-### `POST /api/log`
+### `POST /api/privacy/update`
 
-Accepts a JSON `LogRequest` (`id`, `text`). Used by the optional logger page at `/log`.
+Updates one feature flag or the access mode. Requires JSON or the
+`X-CommandHub-Client` header.
+
+```json
+{ "feature": "camera", "enabled": false }
+```
+
+```json
+{ "accessMode": "LOCAL_ONLY" }
+```
+
+**Response:** the updated `PrivacyState`.
 
 ---
 

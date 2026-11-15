@@ -26,6 +26,19 @@ Camera streaming performance and H.264 work that has landed on `main` since the
   parameter, JSON schema, frame format, and error code.
 - GitHub issue templates, a pull request template, and `SECURITY.md`.
 - README quick start, table of contents, badges, and a Web API summary section.
+- **Privacy & Access Control** with `ONLINE`, `LOCAL_ONLY`, and `OFFLINE` modes plus
+  per-subsystem feature flags and a `/privacy` control page.
+- **Application-scoped DI container** (`CommandHubContainer`) shared by the Activity and
+  foreground service.
+- **Persistent foreground service** that owns the Ktor server and hardware managers, with
+  a user-facing start/stop switch.
+
+### Removed
+
+- Authentication enforcement, `/login`, `/pair`, `/logout`, the token UI, `AuthInterceptor`,
+  and `AuthManager` were temporarily removed so the `ONLINE` / `LOCAL_ONLY` / `OFFLINE`
+  access modes can be tested without pairing. Access is now controlled only by
+  `PrivacyManager`.
 
 ### Changed
 
@@ -60,8 +73,8 @@ Camera streaming performance and H.264 work that has landed on `main` since the
 ### Removed
 
 - Dead Compose UI dashboard components (`DashboardPage`, `DashboardPager`, `KeepScreenOn`, `ModuleUtils`) in favor of the thin-client WebView interface.
-- The JSON-driven Compose dashboard, `LayoutRepository`, and `layout.json` usage.
-  `GET /layout` remains as a legacy empty response for older clients.
+- The JSON-driven Compose dashboard, `LayoutRepository`, `layout.json`, and the legacy
+  `/layout` and `/log` routes.
 - `.idea/` IDE files are no longer tracked in version control.
 
 ## [1.2.0] - 2026-10-10

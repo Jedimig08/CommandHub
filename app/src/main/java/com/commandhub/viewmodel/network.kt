@@ -7,7 +7,6 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.PowerManager
-import com.commandhub.data.AuthManager
 import com.commandhub.data.PrivacyManager
 import com.commandhub.server.WebAssetLoader
 import com.commandhub.server.routes.configureBluetoothRoutes
@@ -19,7 +18,6 @@ import com.commandhub.server.routes.configurePrivacyRoutes
 import com.commandhub.server.routes.configureSensorRoutes
 import com.commandhub.server.routes.configureTcpRoutes
 import com.commandhub.server.routes.configureUartRoutes
-import com.commandhub.server.routes.installAuthInterceptor
 import com.commandhub.server.routes.installPrivacyInterceptor
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
@@ -61,7 +59,6 @@ class DashboardServer(
     private val tcpManager: TcpManager,
     private val hardwareManager: HardwareManager,
     val privacyManager: PrivacyManager = PrivacyManager(context),
-    val authManager: AuthManager = AuthManager(context),
 ) {
     private val webAssetLoader = WebAssetLoader(context)
     private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
@@ -128,7 +125,6 @@ class DashboardServer(
 
         try {
             server = embeddedServer(CIO, port = port, host = "0.0.0.0") {
-                installAuthInterceptor(authManager)
                 installPrivacyInterceptor(privacyManager)
                 install(ContentNegotiation) { json() }
                 install(WebSockets) {
@@ -147,7 +143,6 @@ class DashboardServer(
                     configurePrivacyRoutes(webAssetLoader, privacyManager, ::register)
                     configureCoreRoutes(
                         assetLoader = webAssetLoader,
-                        authManager = authManager,
                         context = context,
                         getProcessingUrl = getProcessingUrl,
                         setProcessingUrl = setProcessingUrl,
