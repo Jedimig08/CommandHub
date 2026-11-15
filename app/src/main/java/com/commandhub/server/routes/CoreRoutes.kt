@@ -1,5 +1,6 @@
 package com.commandhub.server.routes
 
+import android.content.Context
 import com.commandhub.server.WebAssetLoader
 import io.ktor.http.ContentType
 import io.ktor.server.request.receive
@@ -22,6 +23,8 @@ data class SettingsStateResponse(
     val screenOn: Boolean,
     val sensorFastest: Boolean,
     val processingUrl: String,
+    val serverIp: String,
+    val serverUrl: String,
 )
 
 @Serializable
@@ -32,9 +35,40 @@ data class SettingsStatusResponse(
     val url: String = "",
 )
 
+fun getDeviceIpAddress(context: Context): String {
+    try {
+        val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+        var fallbackIp: String? = null
+        while (interfaces.hasMoreElements()) {
+            val intf = interfaces.nextElement()
+            if (!intf.isUp || intf.isLoopback) continue
+            val addrs = intf.inetAddresses
+            while (addrs.hasMoreElements()) {
+                val addr = addrs.nextElement()
+                if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                    val host = addr.hostAddress
+                    if (!host.isNullOrEmpty() && !host.startsWith("169.254")) {
+                        if (host.startsWith("192.168.") || host.startsWith("10.") || host.matches(Regex("172\\.(1[6-9]|2[0-9]|3[0-1])\\..*"))) {
+                            return host
+                        }
+                        if (fallbackIp == null) {
+                            fallbackIp = host
+                        }
+                    }
+                }
+            }
+        }
+        if (fallbackIp != null) return fallbackIp
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    return "127.0.0.1"
+}
+
 fun Route.configureCoreRoutes(
     assetLoader: WebAssetLoader,
     authManager: com.commandhub.data.AuthManager,
+    context: Context,
     getProcessingUrl: () -> String = { "" },
     setProcessingUrl: (String) -> Unit = {},
     publishDomain: () -> Unit = {},
@@ -114,11 +148,14 @@ fun Route.configureCoreRoutes(
         }
     }
     get("/api/settings/state") {
+        val ip = getDeviceIpAddress(context)
         call.respond(
             SettingsStateResponse(
                 screenOn = getKeepScreenOn(),
                 sensorFastest = getSensorDelayFastest(),
                 processingUrl = getProcessingUrl(),
+                serverIp = ip,
+                serverUrl = "http://$ip:8080",
             ),
         )
     }

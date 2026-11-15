@@ -19,19 +19,31 @@ class CommandHubContainer(context: Context) {
     val sensorManager = SensorManager(appContext)
     val tcpManager = TcpManager()
     val hardwareManager = HardwareManager(appContext)
+    val settingsManager = SettingsManager(appContext, sensorManager)
 
-    val server = DashboardServer(
-        context = appContext,
-        port = 8080,
-        uartManager = uartManager,
-        bluetoothManager = bluetoothManager,
-        cameraManager = cameraManager,
-        sensorManager = sensorManager,
-        tcpManager = tcpManager,
-        hardwareManager = hardwareManager,
-        privacyManager = privacyManager,
-        authManager = authManager,
-    )
+    val server: DashboardServer
+
+    init {
+        server = DashboardServer(
+            context = appContext,
+            port = 8080,
+            uartManager = uartManager,
+            bluetoothManager = bluetoothManager,
+            cameraManager = cameraManager,
+            sensorManager = sensorManager,
+            tcpManager = tcpManager,
+            hardwareManager = hardwareManager,
+            privacyManager = privacyManager,
+            authManager = authManager,
+            getProcessingUrl = { settingsManager.processingUiUrl },
+            setProcessingUrl = { settingsManager.updateProcessingUiUrl(it) },
+            publishDomain = { server.registerService() },
+            getKeepScreenOn = { settingsManager.keepScreenOn },
+            setKeepScreenOnEnabled = { settingsManager.setKeepScreenOnEnabled(it) },
+            getSensorDelayFastest = { settingsManager.sensorDelayFastest },
+            updateSensorDelayMode = { settingsManager.updateSensorDelayMode(it) },
+        )
+    }
 
     companion object {
         @Volatile

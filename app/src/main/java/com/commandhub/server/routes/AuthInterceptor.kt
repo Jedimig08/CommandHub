@@ -1,6 +1,7 @@
 package com.commandhub.server.routes
 
 import com.commandhub.data.AuthManager
+import com.commandhub.data.isLoopbackAddress
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -17,6 +18,11 @@ fun Application.installAuthInterceptor(authManager: AuthManager) {
         val path = call.request.path()
         val remoteHost = call.request.local.remoteHost
 
+        // Local loopback requests (127.0.0.1, localhost, ::1) are always trusted as admin
+        if (isLoopbackAddress(remoteHost)) {
+            return@intercept
+        }
+
         // Rate limit pairing or login attempts
         if ((path == "/pair" || path == "/login") && !authManager.checkRateLimit(remoteHost)) {
             call.respond(HttpStatusCode.TooManyRequests, mapOf("error" to "Too many attempts. Locked out temporarily."))
@@ -29,6 +35,7 @@ fun Application.installAuthInterceptor(authManager: AuthManager) {
                 path == "/login" ||
                 path == "/pair" ||
                 path == "/privacy" ||
+                path.startsWith("/api/privacy") ||
                 path.startsWith("/assets/") ||
                 path.endsWith(".css") ||
                 path.endsWith(".js") ||

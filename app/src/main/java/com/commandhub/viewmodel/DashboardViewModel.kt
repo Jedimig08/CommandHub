@@ -1,8 +1,6 @@
 package com.commandhub.viewmodel
 
 import android.app.Application
-import android.content.Context
-import androidx.core.content.edit
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -19,6 +17,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     val hardwareManager = container.hardwareManager
     val privacyManager = container.privacyManager
     val authManager = container.authManager
+    val settingsManager = container.settingsManager
 
     private val server = container.server
 
@@ -31,40 +30,32 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    private val prefs = application.getSharedPreferences("dashboard_prefs", Context.MODE_PRIVATE)
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
-    var keepScreenOn by mutableStateOf(prefs.getBoolean("keep_screen_on", true))
-        private set
+    val keepScreenOn: Boolean
+        get() = settingsManager.keepScreenOn
 
-    var processingUiUrl by mutableStateOf(prefs.getString("processing_ui_url", "http://127.0.0.1:5000/") ?: "http://127.0.0.1:5000/")
-        private set
+    val processingUiUrl: String
+        get() = settingsManager.processingUiUrl
+
+    val sensorDelayFastest: Boolean
+        get() = settingsManager.sensorDelayFastest
 
     fun updateProcessingUiUrl(url: String) {
         mainHandler.post {
-            processingUiUrl = url
-            prefs.edit { putString("processing_ui_url", url) }
+            settingsManager.updateProcessingUiUrl(url)
         }
     }
 
-    var sensorDelayFastest by mutableStateOf(prefs.getBoolean("sensor_delay_fastest", false))
-        private set
-
     fun updateSensorDelayMode(fastest: Boolean) {
         mainHandler.post {
-            sensorDelayFastest = fastest
-            prefs.edit { putBoolean("sensor_delay_fastest", fastest) }
-            sensorManager.setSensorDelayMode(
-                if (fastest) android.hardware.SensorManager.SENSOR_DELAY_FASTEST
-                else android.hardware.SensorManager.SENSOR_DELAY_UI,
-            )
+            settingsManager.updateSensorDelayMode(fastest)
         }
     }
 
     fun setKeepScreenOnEnabled(enabled: Boolean) {
         mainHandler.post {
-            keepScreenOn = enabled
-            prefs.edit { putBoolean("keep_screen_on", enabled) }
+            settingsManager.setKeepScreenOnEnabled(enabled)
         }
     }
 
@@ -76,9 +67,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     init {
         // Server and managers managed via CommandHubContainer & CommandHubService
-        if (sensorDelayFastest) {
-            sensorManager.setSensorDelayMode(android.hardware.SensorManager.SENSOR_DELAY_FASTEST)
-        }
     }
 
     override fun onCleared() {

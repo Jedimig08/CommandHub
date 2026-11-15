@@ -148,6 +148,7 @@ class DashboardServer(
                     configureCoreRoutes(
                         assetLoader = webAssetLoader,
                         authManager = authManager,
+                        context = context,
                         getProcessingUrl = getProcessingUrl,
                         setProcessingUrl = setProcessingUrl,
                         publishDomain = publishDomain,
