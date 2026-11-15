@@ -20,21 +20,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -89,7 +82,6 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             CommandHubTheme {
-                var showSettings by remember { mutableStateOf(false) }
                 var serviceEnabled by remember { mutableStateOf(prefs.getBoolean(SERVICE_ENABLED_KEY, true)) }
 
                 val cameraLauncher = rememberLauncherForActivityResult(
@@ -201,50 +193,6 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-
-                    Button(
-                        onClick = { showSettings = true },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(16.dp),
-                    ) {
-                        Text("Settings")
-                    }
-                }
-
-                if (showSettings) {
-                    AlertDialog(
-                        onDismissRequest = { showSettings = false },
-                        title = { Text("CommandHub Settings") },
-                        text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text("Background server")
-                                    Switch(
-                                        checked = serviceEnabled,
-                                        onCheckedChange = { enabled ->
-                                            serviceEnabled = enabled
-                                            prefs.edit().putBoolean(SERVICE_ENABLED_KEY, enabled).apply()
-                                            if (enabled) {
-                                                startServer()
-                                            } else {
-                                                stopServer()
-                                            }
-                                        },
-                                    )
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            TextButton(onClick = { showSettings = false }) {
-                                Text("Close")
-                            }
-                        },
-                    )
                 }
             }
         }
@@ -252,9 +200,5 @@ class MainActivity : ComponentActivity() {
 
     private fun startServer() {
         startForegroundService(Intent(this, CommandHubService::class.java))
-    }
-
-    private fun stopServer() {
-        stopService(Intent(this, CommandHubService::class.java))
     }
 }
