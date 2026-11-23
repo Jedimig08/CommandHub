@@ -9,6 +9,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.RoutingContext
+import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
@@ -61,6 +62,10 @@ fun Route.configureBluetoothRoutes(
             ),
             ContentType.Text.Html,
         )
+    }
+
+    get("/api/bluetooth/devices") {
+        call.respond(bluetoothManager.getPairedDevices())
     }
 
     webSocket("/bluetooth-ws") {

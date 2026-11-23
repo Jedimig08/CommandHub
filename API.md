@@ -313,9 +313,28 @@ Bidirectional UART communication endpoints.
 ### `GET /bluetooth`, `WS /bluetooth-ws`, `POST /bluetooth-send`, `POST /bluetooth-connect`
 ### `GET /tcp`, `WS /tcp-ws`, `POST /tcp-send`, `POST /tcp-connect`
 
+`GET /api/bluetooth/devices` returns the paired devices as a JSON array of
+`PairedDeviceInfo` objects, the same devices listed by `GET /bluetooth`.
+
+**Response:** `200 application/json`
+
+```json
+[{"name": "ESP32", "address": "00:11:22:33:44:55"}]
+```
+
+The array is empty when Bluetooth is disabled, permission is missing, or no
+devices are paired. The endpoint is blocked by the Bluetooth privacy toggle
+and by non-loopback access in `LOCAL_ONLY`/`OFFLINE` modes.
+
 ---
 
 ## Data Schemas
+
+### `PairedDeviceInfo`
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Paired device name |
+| `address` | string | Bluetooth MAC address |
 
 ### `CameraInfo`
 | Field | Type | Description |

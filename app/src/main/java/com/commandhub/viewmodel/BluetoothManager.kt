@@ -16,7 +16,9 @@ import kotlin.concurrent.thread
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class PairedDeviceInfo(val name: String, val address: String)
 
 class BluetoothClassicManager(context: Context) {

@@ -188,6 +188,7 @@ class CommandHubUnitTest {
         val bluetoothDisabledState = baseState.copy(bluetoothEnabled = false)
         assertNotNull(bluetoothDisabledState.evaluateAccess("/bluetooth", "127.0.0.1"))
         assertNotNull(bluetoothDisabledState.evaluateAccess("/bluetooth-connect", "127.0.0.1"))
+        assertNotNull(bluetoothDisabledState.evaluateAccess("/api/bluetooth/devices", "127.0.0.1"))
 
         // Flashlight toggle
         val flashlightDisabledState = baseState.copy(flashlightEnabled = false)
