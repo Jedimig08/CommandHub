@@ -27,7 +27,7 @@ fun Route.configureBluetoothRoutes(
     bluetoothManager: BluetoothClassicManager,
     register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
 ) {
-    register("/bluetooth", "Bluetooth Terminal") {
+    register("/bluetooth", "Bluetooth Console") {
         val devices = bluetoothManager.getPairedDevices()
         val deviceOptions = devices.joinToString("") {
             "<option value=\"${it.address}\">${it.name} (${it.address})</option>"
@@ -55,7 +55,7 @@ fun Route.configureBluetoothRoutes(
 
         call.respondText(
             assetLoader.loadTerminalPage(
-                title = "Bluetooth Control",
+                title = "Bluetooth Console",
                 wsEndpoint = "/bluetooth-ws",
                 sendEndpoint = "/bluetooth-send",
                 extraControls = controls,

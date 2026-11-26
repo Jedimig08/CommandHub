@@ -173,17 +173,17 @@ fun PrivacyState.evaluateAccess(path: String, remoteHost: String): String? {
 
     // Bluetooth features: ONLY block bluetooth endpoints
     if (isPathMatch(normPath, "/bluetooth", "/bluetooth-send", "/bluetooth-connect", "/bluetooth-ws", "/api/bluetooth") && !this.bluetoothEnabled) {
-        return "Bluetooth SPP terminal has been disabled by Privacy Settings."
+        return "Bluetooth Console has been disabled by Privacy Settings."
     }
 
     // UART features: ONLY block uart endpoints
     if (isPathMatch(normPath, "/uart", "/uart-send", "/uart-ws", "/api/uart") && !this.uartEnabled) {
-        return "UART terminal has been disabled by Privacy Settings."
+        return "Serial Console has been disabled by Privacy Settings."
     }
 
     // TCP features: ONLY block tcp endpoints
     if (isPathMatch(normPath, "/tcp", "/tcp-send", "/tcp-connect", "/tcp-ws", "/api/tcp") && !this.tcpEnabled) {
-        return "TCP console has been disabled by Privacy Settings."
+        return "TCP Console has been disabled by Privacy Settings."
     }
 
     // Flashlight features: ONLY block flashlight endpoints

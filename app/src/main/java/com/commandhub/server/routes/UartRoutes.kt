@@ -22,10 +22,10 @@ fun Route.configureUartRoutes(
     uartManager: UartManager,
     register: (path: String, name: String, body: suspend RoutingContext.() -> Unit) -> Unit,
 ) {
-    register("/uart", "UART Terminal") {
+    register("/uart", "Serial Console") {
         call.respondText(
             assetLoader.loadTerminalPage(
-                title = "UART Control",
+                title = "Serial Console",
                 wsEndpoint = "/uart-ws",
                 sendEndpoint = "/uart-send",
             ),
