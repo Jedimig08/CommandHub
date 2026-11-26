@@ -306,6 +306,12 @@ Talks to a USB serial device (Arduino, ESP32, Polargraph controller) through the
 
 Bidirectional UART communication endpoints.
 
+All three terminal transports (UART, Bluetooth, TCP) forward text frames and
+`POST ...-send` bodies to the attached device verbatim. The bundled terminal page
+offers an optional client-side keepalive with a configurable payload and interval.
+Automatic keepalives are sent as ordinary terminal data and are not echoed to the
+on-page console.
+
 ---
 
 ## Bluetooth Terminal & TCP Console

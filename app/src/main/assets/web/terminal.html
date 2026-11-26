@@ -127,8 +127,18 @@
     <script>
         let ws;
         let lastActivity = Date.now();
-        let pingInterval = null;
+        let keepaliveTimer = null;
         let heartbeatEnabled = false;
+        let heartbeatPayload = 'PING';
+        let heartbeatIntervalSeconds = 10;
+
+        const HEARTBEAT_STORAGE_KEY = 'terminal_heartbeat';
+        const HEARTBEAT_PAYLOAD_STORAGE_KEY = 'terminal_heartbeat_payload';
+        const HEARTBEAT_INTERVAL_STORAGE_KEY = 'terminal_heartbeat_interval';
+        const HEARTBEAT_DEFAULT_PAYLOAD = 'PING';
+        const HEARTBEAT_DEFAULT_INTERVAL_SECONDS = 10;
+        const HEARTBEAT_MIN_INTERVAL_SECONDS = 1;
+        const HEARTBEAT_MAX_INTERVAL_SECONDS = 3600;
 
         const DEFAULT_MACROS = [
             { label: "M1: START", cmd: "START" },
@@ -159,24 +169,88 @@
             consoleDiv.scrollTop = consoleDiv.scrollHeight;
         }
 
-        function toggleHeartbeat(enabled) {
-            heartbeatEnabled = enabled;
-            localStorage.setItem('terminal_heartbeat', enabled ? 'true' : 'false');
-            setupPingInterval();
+        function parseHeartbeatInterval(raw) {
+            const value = Number(raw);
+            if (!Number.isFinite(value)) return HEARTBEAT_DEFAULT_INTERVAL_SECONDS;
+            return Math.min(
+                HEARTBEAT_MAX_INTERVAL_SECONDS,
+                Math.max(HEARTBEAT_MIN_INTERVAL_SECONDS, Math.round(value))
+            );
         }
 
-        function setupPingInterval() {
-            if (pingInterval) {
-                clearInterval(pingInterval);
-                pingInterval = null;
+        function loadHeartbeatSettings() {
+            heartbeatEnabled = localStorage.getItem(HEARTBEAT_STORAGE_KEY) === 'true';
+            const storedPayload = localStorage.getItem(HEARTBEAT_PAYLOAD_STORAGE_KEY);
+            heartbeatPayload = storedPayload === null ? HEARTBEAT_DEFAULT_PAYLOAD : storedPayload;
+            const storedInterval = localStorage.getItem(HEARTBEAT_INTERVAL_STORAGE_KEY);
+            heartbeatIntervalSeconds = parseHeartbeatInterval(
+                storedInterval === null ? HEARTBEAT_DEFAULT_INTERVAL_SECONDS : storedInterval
+            );
+        }
+
+        function persistHeartbeatSettings() {
+            localStorage.setItem(HEARTBEAT_STORAGE_KEY, heartbeatEnabled ? 'true' : 'false');
+            localStorage.setItem(HEARTBEAT_PAYLOAD_STORAGE_KEY, heartbeatPayload);
+            localStorage.setItem(HEARTBEAT_INTERVAL_STORAGE_KEY, String(heartbeatIntervalSeconds));
+        }
+
+        function updateHeartbeatStatus() {
+            const status = document.getElementById('heartbeatStatus');
+            if (!status) return;
+
+            if (!heartbeatEnabled) {
+                status.textContent = 'Keepalive off.';
+                return;
             }
-            if (heartbeatEnabled) {
-                pingInterval = setInterval(() => {
-                    if (ws && ws.readyState === WebSocket.OPEN && (Date.now() - lastActivity > 5000)) {
-                        ws.send("PING");
-                    }
-                }, 2000);
+            if (!heartbeatPayload.trim()) {
+                status.textContent = 'Keepalive on, but the payload is empty.';
+                return;
             }
+
+            const displayPayload = heartbeatPayload
+                .replace(/\\/g, '\\\\')
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\r')
+                .replace(/\t/g, '\\t');
+            status.textContent =
+                'Sends "' + displayPayload + '" every ' + heartbeatIntervalSeconds + 's when idle.';
+        }
+
+        function toggleHeartbeat(enabled) {
+            heartbeatEnabled = enabled;
+            persistHeartbeatSettings();
+            updateHeartbeatStatus();
+            setupKeepalive();
+        }
+
+        function updateHeartbeatPayload(value) {
+            heartbeatPayload = value;
+            persistHeartbeatSettings();
+            updateHeartbeatStatus();
+        }
+
+        function updateHeartbeatInterval(value) {
+            heartbeatIntervalSeconds = parseHeartbeatInterval(value);
+            const input = document.getElementById('heartbeatInterval');
+            if (input) input.value = heartbeatIntervalSeconds;
+            persistHeartbeatSettings();
+            updateHeartbeatStatus();
+            setupKeepalive();
+        }
+
+        function setupKeepalive() {
+            if (keepaliveTimer) {
+                clearInterval(keepaliveTimer);
+                keepaliveTimer = null;
+            }
+            if (!heartbeatEnabled) return;
+
+            keepaliveTimer = setInterval(() => {
+                if (!ws || ws.readyState !== WebSocket.OPEN) return;
+                if (!heartbeatPayload.trim()) return;
+                if (Date.now() - lastActivity < heartbeatIntervalSeconds * 1000) return;
+                ws.send(formatCommand(heartbeatPayload));
+            }, heartbeatIntervalSeconds * 1000);
         }
 
         function connectWs() {
@@ -184,17 +258,18 @@
             ws = new WebSocket(protocol + '//' + window.location.host + '{{wsEndpoint}}');
 
             ws.onopen = () => {
-                setupPingInterval();
+                setupKeepalive();
             };
 
             ws.onmessage = (e) => {
+                lastActivity = Date.now();
                 appendLog('<span style="color:#0f0;">RX:</span> ' + e.data);
             };
 
             ws.onclose = () => {
-                if (pingInterval) {
-                    clearInterval(pingInterval);
-                    pingInterval = null;
+                if (keepaliveTimer) {
+                    clearInterval(keepaliveTimer);
+                    keepaliveTimer = null;
                 }
                 setTimeout(connectWs, 2000);
             };
@@ -288,9 +363,14 @@
         }
 
         window.onload = () => {
-            heartbeatEnabled = localStorage.getItem('terminal_heartbeat') === 'true';
+            loadHeartbeatSettings();
             const cb = document.getElementById('enableHeartbeat');
             if (cb) cb.checked = heartbeatEnabled;
+            const payloadInput = document.getElementById('heartbeatPayload');
+            if (payloadInput) payloadInput.value = heartbeatPayload;
+            const intervalInput = document.getElementById('heartbeatInterval');
+            if (intervalInput) intervalInput.value = heartbeatIntervalSeconds;
+            updateHeartbeatStatus();
             connectWs();
             renderMacros();
         };
@@ -301,10 +381,33 @@
 
     {{extraControls}}
 
-    <div style="margin-bottom: 12px;">
-        <label style="color: #aaa; cursor: pointer; font-size: 0.9em;">
-            <input type="checkbox" id="enableHeartbeat" onchange="toggleHeartbeat(this.checked)"> Enable Heartbeat (PING every 2s when idle)
+    <div style="margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; color: #aaa; font-size: 0.9em;">
+        <label style="cursor: pointer;">
+            <input type="checkbox" id="enableHeartbeat" onchange="toggleHeartbeat(this.checked)"> Enable keepalive
         </label>
+        <label>Payload
+            <input
+                type="text"
+                id="heartbeatPayload"
+                aria-label="Keepalive payload"
+                placeholder="Any text, e.g. PING"
+                style="width: 160px;"
+                onchange="updateHeartbeatPayload(this.value)">
+        </label>
+        <label>Every
+            <input
+                type="number"
+                id="heartbeatInterval"
+                aria-label="Keepalive interval in seconds"
+                min="1"
+                max="3600"
+                step="1"
+                value="10"
+                style="width: 80px;"
+                onchange="updateHeartbeatInterval(this.value)">
+            s
+        </label>
+        <span id="heartbeatStatus" style="color: #888;"></span>
     </div>
 
     <div class="macro-section">

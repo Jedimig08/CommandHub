@@ -57,6 +57,9 @@ Camera streaming performance and H.264 work that has landed on `main` since the
 
 ### Fixed
 
+- Terminal keepalive now uses a configurable payload and interval, is only sent after the
+  configured idle period, and is no longer echoed to the console. The literal `PING`
+  command is treated as normal device data again ([issue #3](https://github.com/Jedimig08/CommandHub/issues/3)).
 - Kotlin serialization plugin bumped to a version compatible with Kotlin 2.3
   (`1.9.0` → `2.4.21`).
 - `COLOR_FormatYUV420SemiPlanar` deprecation suppressed explicitly at the one call

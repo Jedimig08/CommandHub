@@ -139,6 +139,8 @@ single device or workflow.
   processing-UI URL, and mDNS republishing
 - **Terminal macro buttons** for the UART, Bluetooth, and TCP consoles, stored in browser
   `localStorage` and editable from the page
+- **Terminal keepalive** with a configurable payload and interval for the UART, Bluetooth,
+  and TCP consoles; automatic sends are not echoed to the console
 - Camera viewer with live FPS/bitrate/dropped-frame/viewer stats, resolution/FPS/quality
   controls, zoom, exposure, grayscale, and torch toggle
 - Thin Jetpack Compose shell and Material 3 theme around the WebView
@@ -310,8 +312,8 @@ The `data/` package holds `PrivacyManager` (access mode and feature flags),
 `SettingsManager` (UI preferences), and `CommandHubContainer` (process-wide manager/server
 singleton). App settings such as keep-screen-on, sensor delay mode, and the
 processing-UI URL live in `SharedPreferences` and are exposed through the settings API.
-Terminal macros are stored in the browser's `localStorage`. The old JSON layout repository
-and `layout.json` have been removed.
+Terminal macros and keepalive settings are stored in the browser's `localStorage`. The
+old JSON layout repository and `layout.json` have been removed.
 
 ### Hardware Managers
 
@@ -496,7 +498,6 @@ Authentication is currently disabled in favour of the Privacy & Access modes. Th
 highest-priority remaining items are:
 
 - **Camera stream freezing after rotation** and missing WebSocket reconnect ([issue #5](https://github.com/Jedimig08/CommandHub/issues/5))
-- **Terminal heartbeat being forwarded to Bluetooth/UART/TCP devices** ([issue #3](https://github.com/Jedimig08/CommandHub/issues/3))
 - **Unavailable hardware modules still appearing in the UI** and camera permission failures affecting other modules ([issue #6](https://github.com/Jedimig08/CommandHub/issues/6))
 - **Microphone streaming not implemented** ([issue #7](https://github.com/Jedimig08/CommandHub/issues/7))
 
@@ -513,8 +514,6 @@ Although the current version is functional, several improvements are planned:
 - Microphone streaming
   ([issue #7](https://github.com/Jedimig08/CommandHub/issues/7))
 - Bluetooth Low Energy support
-- Fix periodic re-pings for connected Bluetooth Classic devices
-  ([issue #3](https://github.com/Jedimig08/CommandHub/issues/3))
 - MAVLink support for drone communication
 - Additional telemetry widgets and graph visualization
 - Web-based dashboard editor

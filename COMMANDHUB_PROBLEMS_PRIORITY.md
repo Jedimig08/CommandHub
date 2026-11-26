@@ -172,7 +172,13 @@
 - **Fix:** add `GET /api/capabilities`; render cards dynamically; hide unavailable/unimplemented modules; remove the microphone card until issue #7 exists.
 - **Done when:** a device without a camera/Bluetooth/USB host only shows modules it can actually use.
 
-## P1-13 — Issue #3: terminal heartbeat is forwarded to hardware and intervals leak
+## P1-13 — Issue #3: terminal heartbeat is forwarded to hardware and intervals leak (resolved)
+
+- **Status:** resolved. The heartbeat is now an opt-in keepalive with a user-configurable
+  payload and interval. It fires only after the configured idle period, is not written to
+  the console, and is forwarded as normal terminal data. The server no longer reserves
+  the literal `PING`, so manual `PING` commands reach the device again. Timer setup is
+  centralized and cleared on close so reconnects cannot multiply it.
 
 - **Evidence:** `terminal.html:172-176` sends the literal text `"PING"` every 2 seconds; all transports forward text frames to the device (`BluetoothRoutes.kt:77-82`, `UartRoutes.kt:43-47`, `TcpRoutes.kt:64-68`). `setInterval` is created inside `connectWs()` and `onclose` calls `connectWs()` again at `terminal.html:160-177`, multiplying timers on every reconnect. `lastActivity` is not updated on RX.
 - **Impact:** Bluetooth/UART/TCP devices receive unwanted `PING` commands; timer multiplication increases traffic over time.

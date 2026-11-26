@@ -19,7 +19,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 private fun isValidBluetoothInput(text: String): Boolean {
-    return (text.isNotBlank()) && (text.length <= 200) && (!text.startsWith("__"))
+    return text.isNotBlank() && text.length <= 200
 }
 
 fun Route.configureBluetoothRoutes(
@@ -82,7 +82,7 @@ fun Route.configureBluetoothRoutes(
         try {
             for (frame in incoming) {
                 val text = (frame as? Frame.Text)?.readText()?.trim() ?: continue
-                if (text != "PING" && isValidBluetoothInput(text)) {
+                if (isValidBluetoothInput(text)) {
                     bluetoothManager.send(text)
                 }
             }
@@ -93,7 +93,7 @@ fun Route.configureBluetoothRoutes(
 
     post("/bluetooth-send") {
         val text = call.receiveText()
-        if (text.trim() != "PING" && isValidBluetoothInput(text)) {
+        if (isValidBluetoothInput(text)) {
             bluetoothManager.send(text)
         }
         call.respond(HttpStatusCode.OK)
