@@ -3,6 +3,7 @@ package com.commandhub.server.routes
 import android.content.Context
 import com.commandhub.server.WebAssetLoader
 import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
@@ -11,6 +12,7 @@ import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import kotlinx.serialization.Serializable
+import java.net.URL
 
 @Serializable
 data class ProcessingUrlRequest(val url: String = "")
@@ -62,6 +64,15 @@ fun getDeviceIpAddress(context: Context): String {
     return "127.0.0.1"
 }
 
+fun isAllowedProcessingUrl(value: String, context: Context): Boolean {
+    val url = runCatching { URL(value) }.getOrNull() ?: return false
+    val protocol = url.protocol.lowercase()
+    if (protocol != "http" && protocol != "https") return false
+    val host = url.host.lowercase()
+    return host == "127.0.0.1" || host == "localhost" || host == "::1" ||
+        host == getDeviceIpAddress(context).lowercase()
+}
+
 fun Route.configureCoreRoutes(
     assetLoader: WebAssetLoader,
     context: Context,
@@ -96,9 +107,11 @@ fun Route.configureCoreRoutes(
         try {
             val req = runCatching { call.receive<ProcessingUrlRequest>() }.getOrNull()
             val urlStr = req?.url?.ifEmpty { null } ?: call.request.queryParameters["url"] ?: ""
-            if (urlStr.isNotEmpty()) {
-                setProcessingUrl(urlStr)
+            if (!isAllowedProcessingUrl(urlStr, context)) {
+                call.respond(HttpStatusCode.BadRequest, SettingsStatusResponse(url = getProcessingUrl()))
+                return@post
             }
+            setProcessingUrl(urlStr)
             call.respond(SettingsStatusResponse(url = getProcessingUrl()))
         } catch (_: Exception) {
             call.respond(SettingsStatusResponse(url = getProcessingUrl()))

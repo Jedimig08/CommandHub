@@ -17,6 +17,7 @@ import com.commandhub.server.routes.configureCoreRoutes
 import com.commandhub.server.routes.configureFlashlightRoutes
 import com.commandhub.server.routes.configureHardwareRoutes
 import com.commandhub.server.routes.configurePrivacyRoutes
+import com.commandhub.server.routes.configureProcessingProxyRoutes
 import com.commandhub.server.routes.configureSensorRoutes
 import com.commandhub.server.routes.configureTcpRoutes
 import com.commandhub.server.routes.configureUartRoutes
@@ -142,6 +143,7 @@ class DashboardServer(
                     }
 
                     configurePrivacyRoutes(webAssetLoader, privacyManager, ::register)
+                    configureProcessingProxyRoutes(context, getProcessingUrl)
                     configureCoreRoutes(
                         assetLoader = webAssetLoader,
                         context = context,

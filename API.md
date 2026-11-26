@@ -167,7 +167,15 @@ Returns the saved Linux/Termux processing-UI URL.
 ### `POST /api/settings/processing-url`
 
 Saves the processing-UI URL. Accepts either a JSON body (`{"url":"http://..."}`) or an
-`url` query parameter.
+`url` query parameter. Only `http://` and `https://` URLs on `127.0.0.1`, `localhost`,
+`::1`, or the device's own LAN IP are accepted; others return `400`.
+
+### `GET|POST /processing-ui` and `/processing-ui/{path...}`
+
+Reverse proxy for the saved processing server. The browser stays on CommandHub and the
+page, images, and API responses are fetched from the Termux server and returned through
+CommandHub. Query strings, POST bodies, and upstream status/content types are forwarded;
+hop-by-hop headers are stripped and HTML gets a `<base href="/processing-ui/">` tag.
 
 ### `POST /api/settings/publish-domain`
 
