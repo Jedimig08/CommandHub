@@ -62,7 +62,7 @@ private suspend fun RoutingContext.proxyRequest(
 
     try {
         val parsedBase = URL(baseUrl)
-        val tail = call.parameters["path"]?.trimStart('/').orEmpty()
+        val tail = call.parameters.getAll("path")?.joinToString("/")?.trimStart('/').orEmpty()
         val basePath = parsedBase.path.trimEnd('/')
         val targetPath = if (tail.isEmpty()) {
             basePath.ifEmpty { "/" }
@@ -116,10 +116,11 @@ private suspend fun RoutingContext.proxyRequest(
         if (status.value in 300..399 && !location.isNullOrBlank()) {
             val upstreamOrigin = "${parsedBase.protocol}://${parsedBase.host}" +
                 if (parsedBase.port != -1) ":${parsedBase.port}" else ""
-            val proxiedLocation = if (location.startsWith(upstreamOrigin, ignoreCase = true)) {
-                PROXY_PREFIX + location.removePrefix(upstreamOrigin)
-            } else {
-                location
+            val proxiedLocation = when {
+                location.startsWith(upstreamOrigin, ignoreCase = true) ->
+                    PROXY_PREFIX + location.removePrefix(upstreamOrigin)
+                location.startsWith("/") -> PROXY_PREFIX + location
+                else -> location
             }
             call.response.header(HttpHeaders.Location, proxiedLocation)
         }
