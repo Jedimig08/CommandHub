@@ -151,6 +151,67 @@
 
         let macros = JSON.parse(localStorage.getItem('terminal_macros') || JSON.stringify(DEFAULT_MACROS));
 
+        const HISTORY_STORAGE_PREFIX = 'terminal_history_';
+        const HISTORY_LIMIT = 100;
+        const historyKey = HISTORY_STORAGE_PREFIX + window.location.pathname;
+        let commandHistory = loadHistory();
+        let historyIndex = 0;
+        let historyDraft = '';
+
+        function loadHistory() {
+            try {
+                const stored = JSON.parse(localStorage.getItem(historyKey) || '[]');
+                if (!Array.isArray(stored)) return [];
+                return stored.filter(item => typeof item === 'string').slice(0, HISTORY_LIMIT);
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function persistHistory() {
+            localStorage.setItem(historyKey, JSON.stringify(commandHistory));
+        }
+
+        function rememberCommand(rawVal) {
+            if (!rawVal) return;
+            const value = String(rawVal);
+            if (commandHistory[0] === value) return;
+            commandHistory.unshift(value);
+            if (commandHistory.length > HISTORY_LIMIT) commandHistory.length = HISTORY_LIMIT;
+            persistHistory();
+            historyIndex = 0;
+            historyDraft = '';
+        }
+
+        function handleInputKey(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                send();
+                return;
+            }
+
+            const input = document.getElementById('input');
+            if (!input) return;
+
+            if (event.key === 'ArrowUp') {
+                if (commandHistory.length === 0) return;
+                if (historyIndex === 0) historyDraft = input.value;
+                historyIndex = Math.min(historyIndex + 1, commandHistory.length);
+                input.value = commandHistory[historyIndex - 1];
+                input.setSelectionRange(input.value.length, input.value.length);
+                event.preventDefault();
+                return;
+            }
+
+            if (event.key === 'ArrowDown') {
+                if (historyIndex === 0) return;
+                historyIndex -= 1;
+                input.value = historyIndex === 0 ? historyDraft : commandHistory[historyIndex - 1];
+                input.setSelectionRange(input.value.length, input.value.length);
+                event.preventDefault();
+            }
+        }
+
         function getTime() {
             const d = new Date();
             return d.getHours().toString().padStart(2,'0') + ":" +
@@ -290,6 +351,7 @@
 
         function sendCustom(rawVal) {
             if(!rawVal) return;
+            rememberCommand(rawVal);
             const val = formatCommand(rawVal);
             lastActivity = Date.now();
 
@@ -434,12 +496,14 @@
             id="input"
             aria-label="Enter command"
             placeholder="Enter command..."
+            title="Use Arrow Up and Arrow Down to recall previous commands"
             style="flex:1;"
-            onkeydown="if(event.key==='Enter') send()">
+            onkeydown="handleInputKey(event)">
 
         <button onclick="send()">
             Send
         </button>
+        <span style="font-size:0.8em; color:#888; align-self:center;">&#8593;/&#8595; history</span>
     </div>
 </body>
 </html>

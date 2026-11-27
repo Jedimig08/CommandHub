@@ -12,6 +12,9 @@ Camera streaming performance and H.264 work that has landed on `main` since the
 
 ### Added
 
+- **Terminal command history** in the Bluetooth, Serial, and TCP consoles: use
+  `Arrow Up` / `Arrow Down` to recall previously sent commands, persisted per
+  console in local storage (issue #12).
 - Hardware **H.264 encoding** (`MediaCodec`) with a `WS /h264-ws/{id}` endpoint that
   delivers SPS/PPS configuration followed by NAL units for clients that can decode H.264.
 - JPEG-over-WebSocket camera streams at `WS /camera-ws/{id}` as a lower-overhead
