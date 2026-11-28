@@ -15,6 +15,8 @@ import io.ktor.server.websocket.webSocket
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
 import io.ktor.utils.io.writeStringUtf8
+import io.ktor.websocket.CloseReason
+import io.ktor.websocket.close
 import io.ktor.websocket.Frame
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
@@ -142,20 +144,27 @@ fun Route.configureCameraRoutes(
         val width = parts.getOrNull(0)?.toIntOrNull() ?: 640
         val height = parts.getOrNull(1)?.toIntOrNull() ?: 480
 
-        val flow = cameraManager.getH264Flow(cameraId, width, height, fpsParam, bitrateParam)
-
-        cameraManager.getH264SpsPps()?.let { spsPps ->
-            try {
-                send(Frame.Binary(fin = true, data = spsPps))
-            } catch (_: Exception) {}
+        if (!cameraManager.tryAcquireViewer()) {
+            close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER, "Too many camera viewers"))
+            return@webSocket
         }
 
+        val flow = cameraManager.getH264Flow(cameraId, width, height, fpsParam, bitrateParam)
+
         try {
+            cameraManager.getH264SpsPps()?.let { spsPps ->
+                try {
+                    send(Frame.Binary(fin = true, data = spsPps))
+                } catch (_: Exception) {}
+            }
+
             flow.conflate().collect { nalBytes ->
                 send(Frame.Binary(fin = true, data = nalBytes))
             }
         } catch (_: Exception) {
             // Disconnected
+        } finally {
+            cameraManager.releaseViewer()
         }
     }
 
@@ -169,6 +178,11 @@ fun Route.configureCameraRoutes(
         val width = parts.getOrNull(0)?.toIntOrNull() ?: 640
         val height = parts.getOrNull(1)?.toIntOrNull() ?: 480
 
+        if (!cameraManager.tryAcquireViewer()) {
+            close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER, "Too many camera viewers"))
+            return@webSocket
+        }
+
         val flow = cameraManager.getFlow(cameraId, width, height, fpsParam, qualityParam, grayscaleParam)
         try {
             flow.conflate().collect { jpegBytes ->
@@ -176,6 +190,8 @@ fun Route.configureCameraRoutes(
             }
         } catch (_: Exception) {
             // Disconnected
+        } finally {
+            cameraManager.releaseViewer()
         }
     }
 
@@ -189,9 +205,21 @@ fun Route.configureCameraRoutes(
         val width = parts.getOrNull(0)?.toIntOrNull() ?: 640
         val height = parts.getOrNull(1)?.toIntOrNull() ?: 480
 
+        if (!cameraManager.tryAcquireViewer()) {
+            call.respond(HttpStatusCode.TooManyRequests, mapOf("error" to "Too many camera viewers"))
+            return@get
+        }
+
         val boundary = "frame"
         call.respondBytesWriter(contentType = ContentType.parse("multipart/x-mixed-replace; boundary=$boundary")) {
-            streamCamera(cameraManager.getFlow(cameraId, width, height, fpsParam, qualityParam, grayscaleParam), boundary)
+            try {
+                streamCamera(
+                    cameraManager.getFlow(cameraId, width, height, fpsParam, qualityParam, grayscaleParam),
+                    boundary,
+                )
+            } finally {
+                cameraManager.releaseViewer()
+            }
         }
     }
 

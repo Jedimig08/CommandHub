@@ -42,6 +42,7 @@ import androidx.camera.core.Camera
 import kotlinx.serialization.Serializable
 import java.util.Arrays
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicInteger
 
 @Serializable
 data class CameraStats(
@@ -80,6 +81,10 @@ data class CameraInfo(
 
 class CameraManager(private val context: Context) {
 
+    companion object {
+        const val MAX_VIEWERS = 5
+    }
+
     private var cameraProvider: ProcessCameraProvider? = null
     private val cameraExecutor = Executors.newSingleThreadExecutor()
     private val encodeExecutor = Executors.newSingleThreadExecutor()
@@ -109,6 +114,19 @@ class CameraManager(private val context: Context) {
     private var bytesInLastWindow = 0L
     private var currentCalculatedFps = 0f
     private var currentCalculatedBitrate = 0L
+    private val viewerCount = AtomicInteger(0)
+
+    fun tryAcquireViewer(): Boolean {
+        while (true) {
+            val current = viewerCount.get()
+            if (current >= MAX_VIEWERS) return false
+            if (viewerCount.compareAndSet(current, current + 1)) return true
+        }
+    }
+
+    fun releaseViewer() {
+        viewerCount.updateAndGet { count -> if (count > 0) count - 1 else 0 }
+    }
 
     fun recordFrameProcessed(bytes: Int) {
         totalFramesCaptured++
@@ -161,8 +179,7 @@ class CameraManager(private val context: Context) {
     fun getCameraStats(): CameraStats {
         val zoom = boundCamera?.cameraInfo?.zoomState?.value
         val exposure = boundCamera?.cameraInfo?.exposureState
-        val totalViewers = cameraFlows.values.sumOf { it.subscriptionCount.value } +
-                h264Flows.values.sumOf { it.subscriptionCount.value }
+        val totalViewers = viewerCount.get()
 
         return CameraStats(
             activeCameraId = activeCameraId,
